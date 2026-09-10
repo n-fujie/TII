@@ -1,0 +1,16 @@
+{
+  "name": "tii",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Transition-Ignition Identifier (TII) — minimal viable identification & audit infrastructure. PROVISIONAL / test identifiers only.",
+  "type": "commonjs",
+  "engines": { "node": ">=18" },
+  "bin": { "tii": "bin/tii.js" },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "verify": "node bin/tii.js verify",
+    "rebuild-static": "node bin/tii.js rebuild-static"
+  },
+  "dependencies": {}
+}
