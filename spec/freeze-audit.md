@@ -4,8 +4,16 @@ Transition-Ignition Identifier · audit round: identifier + verification layer
 
 > **Production issuance is DISABLED and remains disabled.** No production TII has
 > been issued. No identifier's `identifier_status` has changed from `"test"`.
-> `src/id.js`, ledger semantics, and issuance behaviour are unchanged. The only
-> code added is `src/candidate/*` (not imported anywhere) plus its tests.
+> `src/id.js`, ledger semantics, `src/canonical.js`, and issuance behaviour are
+> unchanged. The only code added is `src/candidate/*` (not imported anywhere)
+> plus its tests.
+>
+> **Revised after the first audit round** — three corrections, no other change:
+> (1) UUIDv4 assessed as a legitimate RFC 9562 candidate, technical rationale
+> only (§D); (2) RFC 3986 fragment handling — a fragment is a generic component,
+> separated, not an invalid TII (§C companion spec §2.1, §6, §7); (3) signed
+> checkpoint canonicalization is normatively **RFC 8785 JCS**, in a module
+> separate from the ledger's hash-chain canonicalization (§E).
 
 This document is reports **A–H** plus the decision table (§32), the theoretical
 audit (§33) and the acceptance-condition answers (§34). The companion documents:
@@ -176,55 +184,56 @@ long-term stability (see §10 / §33).
 
 ## D. Identifier syntax comparison
 
-Candidates evaluated (all with 128-bit CSPRNG entropy unless noted):
+Candidates evaluated (all with 128-bit CSPRNG entropy unless noted). All three
+are legitimate standardized identifier formats; the comparison is technical.
 
 - **A** — Base32 (RFC 4648), unpadded, lowercase, 26 chars. `tii:aaaqeayeaudaocajbifqydiob4`
 - **B** — lowercase hex, 32 chars. `tii:000102030405060708090a0b0c0d0e0f`
-- **C** — UUIDv4 textual form, 36 chars, **122** bits effective entropy. `tii:xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`
+- **C** — UUIDv4 textual form (RFC 9562), 36 chars, **122** random bits (4 version + 2 variant bits fixed). `tii:xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx`
 
 | Criterion | A · Base32/26 | B · hex/32 | C · UUIDv4/36 |
 |---|---|---|---|
-| Effective entropy | 128 bits | 128 bits | **122 bits** (6 bits fixed) |
-| Collision resistance | excellent | excellent | excellent (slightly less) |
-| Visual length | **26** | 32 | 36 (with hyphens) |
+| Random entropy | 128 bits | 128 bits | 122 bits (6 bits fixed by RFC 9562) |
+| Collision resistance | excellent (§B) | excellent (§B) | excellent (2⁶× smaller space; still negligible at any real scale) |
+| Textual length | 26 | 32 | 36 (32 hex digits + 4 hyphens) |
 | Alphabet | `a–z 2–7` | `0–9 a–f` | `0–9 a–f` + `-` |
-| Transcription risk | low; **no `0 1 8 9`**, so no 0/O or 1/l confusion in the token | low; short alphabet but `0/O`, `1/l` still typable as errors (rejected, not repaired) | low, but hyphen grouping invites mis-segmentation and people re-case it |
-| Parser ambiguity | **one** canonical form; one subtlety (zero-tail rule, §A.3), fully specified | trivial; zero subtleties | canonical form defined by RFC 9562 but widely mis-cased; version/variant nibbles must be validated |
-| Canonicalisation complexity | low (lowercase + zero-tail check) | **lowest** | medium (case + hyphen positions + version/variant) |
-| Standardisation | RFC 4648 (ubiquitous) | universal | RFC 9562 (very strong) |
-| URI compatibility (RFC 3986) | clean; token is all `unreserved` | clean | hyphen is `unreserved`; fine, but looks URL-ish |
-| Filename compatibility | **excellent** (no case-fold collisions on case-insensitive filesystems? — all lowercase, safe) | excellent | hyphens fine; case-insensitive FS irrelevant (all lowercase) |
-| Database compatibility | stores as `CHAR(26)`; no dashes | `CHAR(32)`; hex indexes well | native `UUID` column in some DBs — tempting but couples you to that type |
-| "Looks like an opaque reference" | **yes** | somewhat (reads like a hash) | **no** — reads like a row key; invites DB-identity assumptions (§33) |
-| Future portability | high | high | high, but the type-coupling temptation is a long-term hazard |
+| Transcription risk | low; alphabet omits `0 1 8 9` | low; `0`/`o`, `1`/`l` mistypes are possible but rejected, not repaired | low; same digit/letter mistypes possible; hyphen positions add a place to err |
+| Parser work | one canonical form; the RFC 4648 zero-tail rule for a 16-byte value must be enforced (§A.3) | one canonical form; no special cases | canonical form is RFC 9562; requires case normalization, fixed hyphen positions, and version/variant-bit validation |
+| Canonicalisation complexity | low (lowercase + zero-tail check) | lowest | moderate (case + hyphens + version/variant) |
+| Standardisation | RFC 4648 | universal convention | RFC 9562 (strong, dedicated) |
+| URI compatibility (RFC 3986) | token is all `unreserved` | all `unreserved` | `-` is `unreserved`; also fine |
+| Filename compatibility | fine (all lowercase, no separators) | fine | fine (`-` is portable) |
+| Database compatibility | `CHAR(26)` | `CHAR(32)`; indexes as hex | `CHAR(36)` or a native `UUID` column type where available |
+| Version/variant structure | none | none | present, and unused by TII |
+| Future portability | high | high | high |
 
 ### D.1 Recommendation: **A (Base32, 26 characters)**
 
-Reasoning, in priority order (long-term stability and unambiguous parsing over
-shortness, per the brief):
+UUIDv4 is a legitimate candidate. Candidate A is preferred on purely technical
+grounds:
 
-1. **Unambiguous parsing.** A has exactly one canonical form and one clearly
-   specified subtlety (the zero-tail rule), which the reference decoder enforces
-   by rejection. B is even simpler but its advantage is marginal. C carries
-   real, recurring canonicalization confusion in the wild (casing, hyphen
-   handling, and the version/variant nibbles that must be checked or the "UUID"
-   isn't a valid v4).
-2. **Full 128 bits.** A and B give 128 bits. C gives 122 — not a practical
-   collision problem, but choosing a format that *discards* 6 bits of entropy
-   for cosmetic structure is the wrong default for a freeze.
-3. **It does not look like a database key.** This is a genuine theoretical
-   safeguard (§33): a UUID invites "this is a row in a table of objects", which
-   is exactly the object-database framing TII rejects. An opaque Base32 blob
-   invites nothing.
-4. **Transcription safety.** A's alphabet omits `0 1 8 9`; there is no digit
-   that a reader can confuse with a letter *inside a valid token*. Invalid
-   characters are rejected with a specific error, never repaired.
-5. **Length.** 26 vs 32 vs 36. A is shortest, but this is the least important
-   factor and did not drive the decision.
+1. **Full 128 random bits.** A and B carry 128 random bits; UUIDv4 carries 122
+   (RFC 9562 fixes 4 version + 2 variant bits). Not a practical collision
+   concern, but for a value whose only job is to be a random reference there is
+   no reason to spend 6 bits on structure.
+2. **No unnecessary structure.** UUIDv4's version and variant fields are
+   meaningful for UUID interoperability but carry no information TII needs, and a
+   conformant parser must still validate them. A and B have nothing to validate
+   beyond the alphabet (A: plus the zero-tail rule).
+3. **Compactness.** 26 characters vs 32 (hex) vs 36 (UUID text: 32 hex digits +
+   4 hyphens). Hyphens are pure textual overhead here. Shortness is the
+   lowest-priority factor but favours A.
+4. **Parsing.** A has one canonical form with one clearly specified rule (the
+   RFC 4648 zero-tail constraint, enforced by rejection). B has none. UUIDv4's
+   canonical text is well defined but requires case-folding, hyphen-position
+   checks, and version/variant checks.
+5. **Transcription.** A's alphabet omits `0 1 8 9`, removing the most common
+   digit/letter confusions from inside a valid token. Invalid characters are
+   rejected with a specific error, never substituted.
 
-B is an acceptable fallback if a future review finds the zero-tail rule too
-subtle to communicate; the migration cost between A and B before any production
-issuance is zero. **C is not recommended.**
+B (hex/32) is an acceptable fallback — simplest of all, at the cost of 6
+characters — and the migration cost between A and B before any production
+issuance is zero. C (UUIDv4) is viable but not preferred, for reasons 1–3.
 
 ---
 
@@ -244,7 +253,7 @@ ledger events ──SHA-256 chain──▶ ledger head hash
               periodic ─────────────▶ checkpoint  { tii_checkpoint, ledger_head_hash,
                                      │              event_count, created_at, spec_version }
                                      │
-        canonical JSON (sorted keys) ▼
+             RFC 8785 JCS  (UTF-8)   ▼
                               Ed25519 signature  (RFC 8032, node:crypto)
                                      │
                     signed checkpoint file  { algorithm:"ed25519", key_id,
@@ -256,9 +265,18 @@ ledger events ──SHA-256 chain──▶ ledger head hash
 - **Ed25519**, via `node:crypto` (`crypto.sign(null, …)` / `crypto.verify`).
   Standard, widely reviewed; no invented algorithm; no blockchain, token, or
   cryptoasset.
-- The signed object is **canonical JSON of the checkpoint** — never rendered
-  HTML, never an unstable serialization. `src/canonical.js` (already in the
-  repo) provides the deterministic, key-sorted encoding.
+- **Signing input (normative):** the UTF-8 bytes of the **RFC 8785 JSON
+  Canonicalization Scheme (JCS)** canonicalization of the checkpoint object.
+  JCS gives property-order, whitespace, and representation independence, defines
+  number serialization via ECMAScript `Number::toString`, and requires
+  duplicate property names to be rejected. Never rendered HTML, never an
+  unstable serialization. Implemented in `src/candidate/jcs.js` (canonicalize +
+  a strict, duplicate-rejecting parser).
+- **Separate from the ledger.** The historical ledger hash-chain uses
+  `src/canonical.js` and is **not migrated or changed**. Checkpoint
+  canonicalization (JCS) and ledger canonicalization are independent by design:
+  the ledger format is frozen by every existing hash; the checkpoint format is
+  new and adopts the cross-implementation standard.
 - A checkpoint minimally binds: ledger head hash, event count / sequence
   position, checkpoint creation time, and the specification version /
   interpretation reference where appropriate.
@@ -291,11 +309,17 @@ ledger events ──SHA-256 chain──▶ ledger head hash
 
 ### E.4 Portability of signed checkpoints
 
-`serialize()` / `deserialize()` are plain UTF-8 JSON. A signed checkpoint
+`serialize()` writes plain UTF-8 JSON (pretty-printing allowed — it is not the
+signing input). `deserialize()` is the strict JCS parser, which **rejects
+duplicate property names** before anything is verified. A signed checkpoint
 verifies with **only the file** (it embeds its `public_key`), or against a
-keyset file. No Vercel, no production database, no proprietary API, no original
-UI, no original host. Tests prove file-only verification and rejection of a
-one-byte corruption.
+keyset file. The signing input is RFC 8785 JCS of the `checkpoint` object, so a
+second implementation reproduces it from the standard alone — no shared code,
+no Vercel, no production database, no proprietary API, no original UI, no
+original host. Tests prove: property-order independence, whitespace
+independence, Unicode/numeric round-trips, file-only verification, duplicate-key
+rejection, and rejection of a one-byte corruption. The RFC 8785 Appendix B
+example is a conformance test (`test/candidate-jcs.test.js`).
 
 ### E.5 External witnesses (optional, never foundational)
 
@@ -396,7 +420,7 @@ generation          crypto.randomBytes(16); fail closed; never a non-CSPRNG sour
 issuance            generate → canonicalise → registry uniqueness check → discard-and-retry on hit → append tii.issued
 non-reuse           a committed production tii.issued token is never reused or deleted
 resolver            https://<resolver-base>/tii/<token>  — base is config, not part of the identifier
-verification        SHA-256 event chain + periodic Ed25519-signed checkpoints (canonical JSON), file-portable
+verification        SHA-256 event chain (unchanged) + periodic Ed25519-signed checkpoints; signing input = RFC 8785 JCS of the checkpoint JSON; file-portable
 key model           keyset with not_before / not_after / revoked_at; rotation never invalidates prior signatures
 withdrawal          appended event; tombstone-style resolution; never a 404, never a mutation
 invalid issuance    appended "issuance considered invalid" event; issuance event untouched; identifier not reassigned
@@ -425,7 +449,7 @@ production issuance DISABLED
 | Collision procedure | negligible birthday risk + mandatory local uniqueness check; discard collided candidate pre-record; never reuse | **candidate** |
 | Resolver model | `https://<resolver-base>/tii/<token>`; base is configuration | **candidate** |
 | Permanent domain | — | **UNDECIDED** unless separately approved |
-| Signature mechanism | Ed25519 over canonical-JSON checkpoints (`node:crypto`) | **candidate** |
+| Signature mechanism | Ed25519 (`node:crypto`); signing input = RFC 8785 JCS of the checkpoint | **candidate** |
 | Key-rotation model | keyset with `not_before` / `not_after` / `revoked_at`; historical signatures stay valid | **candidate** |
 | Withdrawal model | appended event; tombstone resolution; no deletion, no 404, no mutation | **candidate** |
 | Transfer model | appended stewardship-transfer event; steward is a relation | **candidate** |
@@ -476,7 +500,7 @@ historically traceable and revisable.
 | What happens if a record is withdrawn? | An appended withdrawal event; the resolver returns a tombstone-style status explaining the withdrawal, **not** a 404; unknown and invalid identifiers remain distinguishable from withdrawn ones. |
 | What happens if stewardship transfers? | An appended stewardship-transfer event (previous steward, new steward, effective time, evidence, authorization, contestation). No new TII is minted. |
 | What happens if TII Specification 2.0 rejects concepts used in 1.0? | Previously issued identifiers remain valid and unchanged. The interpretation change is itself a recorded, inspectable event; 1.0-era records keep their 1.0 interpretation context. A spec revision never silently rewrites the historical meaning of past records (main SPEC §7.1). |
-| Can another implementation reconstruct and verify the system without the original cloud provider? | Yes. Export = the JSONL ledger + signed checkpoint files + keyset file, all plain UTF-8. A second implementation rebuilds derived state, re-verifies the SHA-256 chain, and re-verifies Ed25519 checkpoint signatures with zero dependency on Vercel, the production DB, any proprietary API, or the original UI. Tests demonstrate file-only verification. |
+| Can another implementation reconstruct and verify the system without the original cloud provider? | Yes. Export = the JSONL ledger + signed checkpoint files + keyset file, all plain UTF-8. A second implementation rebuilds derived state, re-verifies the SHA-256 event chain (ledger canonicalization) and re-verifies the Ed25519 checkpoint signatures (RFC 8785 JCS of each `checkpoint` object) with zero dependency on Vercel, the production DB, any proprietary API, or the original UI, and with no shared code — JCS is a published standard. Tests demonstrate file-only verification and RFC 8785 conformance. |
 | Can every previously issued production TII remain unchanged through all of those events? | Yes. In none of the above does any answer require changing an already-issued identifier string. If a future proposal ever did, that proposal is rejected as a failed freeze. |
 
 ---

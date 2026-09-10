@@ -49,15 +49,21 @@ named steward organization or a governance body, explicitly transferable).
 ABNF (RFC 5234), compatible with RFC 3986:
 
 ```abnf
-tii-URI     = "tii:" tii-token
-tii-token   = 25(base32) base32-final
-base32      = %x61-7A / "2" / "3" / "4" / "5" / "6" / "7"   ; a-z 2-7
-base32-final= "a" / "e" / "i" / "m" / "q" / "u" / "y" / "4"
+tii           = "tii:" tii-token            ; the canonical identifier
+tii-token     = 25(base32) base32-final
+base32        = %x61-7A / "2" / "3" / "4" / "5" / "6" / "7"   ; a-z 2-7
+base32-final  = "a" / "e" / "i" / "m" / "q" / "u" / "y" / "4"
+
+tii-reference = tii [ "#" fragment ]         ; RFC 3986 URI reference; the
+                                             ; fragment is a generic component
 ```
 
 The token is 128 bits of cryptographically secure random data, RFC 4648 Base32,
-unpadded, lowercase, exactly 26 characters. There is no authority component, no
-path, no query, and no fragment. On input the scheme is case-insensitive
+unpadded, lowercase, exactly 26 characters. A canonical `tii` has no authority,
+path, or query component. A `#fragment`, when present, is a generic RFC 3986
+component (RFC 3986 §3.5): it is separated before any scheme-specific
+processing, is removed before resolution, does not affect registry lookup, and
+is assigned no `tii`-specific semantics. On input the scheme is case-insensitive
 (RFC 3986 §3.1) and the Base32 letters may be uppercase; the canonical form is
 entirely lowercase.
 
@@ -80,13 +86,14 @@ contains no natural-language text.
 
 ## Interoperability considerations (RFC 7595 §3.5)
 
-There is exactly one canonical textual form. Implementations MUST reject
-non-canonical input rather than repair it (no character substitution such as
-`0`→`o` or `1`→`l`; no acceptance of Base32 `=` padding; no whitespace, path,
-query, or fragment). Because 128 bits over 26 Base32 symbols leaves two trailing
-zero bits, the final character is constrained to `{a, e, i, m, q, u, y, 4}` and
-decoders MUST reject other final characters (RFC 4648 §3.5). Machine-readable
-test vectors accompany the specification.
+There is exactly one canonical textual form of a `tii`. Implementations MUST
+reject non-canonical input rather than repair it (no character substitution such
+as `0`→`o` or `1`→`l`; no acceptance of Base32 `=` padding; no whitespace,
+authority, path, or query). A `#fragment` is handled per RFC 3986 (separated,
+not part of the identifier), not rejected as malformed. Because 128 bits over 26
+Base32 symbols leaves two trailing zero bits, the final character is constrained
+to `{a, e, i, m, q, u, y, 4}` and decoders MUST reject other final characters
+(RFC 4648 §3.5). Machine-readable test vectors accompany the specification.
 
 ## Security considerations (RFC 7595 §3.6)
 

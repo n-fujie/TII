@@ -68,6 +68,63 @@
       "canonical": "tii:aaaqeayeaudaocajbifqydiob4"
     }
   ],
+  "uri_references": [
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob4#section-3",
+      "tii": "tii:aaaqeayeaudaocajbifqydiob4",
+      "fragment": "section-3",
+      "parsed_tii": "tii:aaaqeayeaudaocajbifqydiob4",
+      "parsed_fragment": "section-3",
+      "parseCanonicalTII_rejects_with": "has-fragment",
+      "canonicalize_result": "tii:aaaqeayeaudaocajbifqydiob4",
+      "resolution_url": "https://resolver.example/tii/aaaqeayeaudaocajbifqydiob4",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaaaaaaaaaaaaaaaaaaaaaaaa#",
+      "tii": "tii:aaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "fragment": "",
+      "parsed_tii": "tii:aaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "parsed_fragment": "",
+      "parseCanonicalTII_rejects_with": "has-fragment",
+      "canonicalize_result": "tii:aaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "resolution_url": "https://resolver.example/tii/aaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob4#a#b",
+      "tii": "tii:aaaqeayeaudaocajbifqydiob4",
+      "fragment": "a#b",
+      "parsed_tii": "tii:aaaqeayeaudaocajbifqydiob4",
+      "parsed_fragment": "a#b",
+      "parseCanonicalTII_rejects_with": "has-fragment",
+      "canonicalize_result": "tii:aaaqeayeaudaocajbifqydiob4",
+      "resolution_url": "https://resolver.example/tii/aaaqeayeaudaocajbifqydiob4",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob4",
+      "tii": "tii:aaaqeayeaudaocajbifqydiob4",
+      "fragment": null,
+      "parsed_tii": "tii:aaaqeayeaudaocajbifqydiob4",
+      "parsed_fragment": null,
+      "parseCanonicalTII_rejects_with": "NO-THROW",
+      "canonicalize_result": "tii:aaaqeayeaudaocajbifqydiob4",
+      "resolution_url": "https://resolver.example/tii/aaaqeayeaudaocajbifqydiob4",
+      "matches": true
+    },
+    {
+      "input": "TII:AAAQEAYEAUDAOCAJBIFQYDIOB4#X",
+      "tii": "tii:aaaqeayeaudaocajbifqydiob4",
+      "fragment": "X",
+      "parsed_tii": "tii:aaaqeayeaudaocajbifqydiob4",
+      "parsed_fragment": "X",
+      "parseCanonicalTII_rejects_with": "has-fragment",
+      "canonicalize_result": "tii:aaaqeayeaudaocajbifqydiob4",
+      "resolution_url": "https://resolver.example/tii/aaaqeayeaudaocajbifqydiob4",
+      "matches": true
+    }
+  ],
   "rejected_inputs": [
     {
       "input": "",
@@ -215,8 +272,9 @@
     },
     {
       "input": "tii:aaaqeayeaudaocajbifqydiob4#frag",
-      "code": "fragment",
-      "actual_code": "fragment",
+      "code": "has-fragment",
+      "note": "a URI reference with a fragment — not a canonical TII; see uri_references",
+      "actual_code": "has-fragment",
       "matches": true
     }
   ],
@@ -228,10 +286,11 @@
     "note": "Changing the resolver base does not change the identifier or the token."
   },
   "example_identifiers_non_normative": [
-    "tii:57kdge4okastyqn7dtwsf3fulq",
-    "tii:qchgvfmasqs4vth437276sucn4",
-    "tii:wbf4sq4rwxznxgiu2hrkndzl5u"
+    "tii:jsdyo2e3rxur4wvywrm4w2vhha",
+    "tii:6cfkpxkehixbsoj2zsdwcs3sri",
+    "tii:glp6znifssfsovjwxs3epwpjje"
   ],
   "all_rejections_match": true,
+  "all_uri_references_match": true,
   "all_roundtrips_ok": true
 }

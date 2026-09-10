@@ -56,16 +56,40 @@ const rejected = [
   { input: `tii:${T}/`, code: 'path' },
   { input: `tii:${T}/extra`, code: 'path' },
   { input: `tii:${T}?x=1`, code: 'query' },
-  { input: `tii:${T}#frag`, code: 'fragment' },
+  { input: `tii:${T}#frag`, code: 'has-fragment', note: 'a URI reference with a fragment — not a canonical TII; see uri_references' },
 ].map((c) => {
   let got;
   try {
-    id.parse(c.input);
+    id.parseCanonicalTII(c.input);
     got = 'NO-THROW';
   } catch (e) {
     got = e.code || e.name;
   }
   return { ...c, actual_code: got, matches: got === c.code };
+});
+
+// RFC 3986 URI references: the fragment is separated BEFORE TII processing and
+// does not affect the token or registry lookup.
+const T2 = roundtrip[0].token; // 26 'a's
+const uriReferences = [
+  { input: `tii:${T}#section-3`, tii: `tii:${T}`, fragment: 'section-3' },
+  { input: `tii:${T2}#`, tii: `tii:${T2}`, fragment: '' },
+  { input: `tii:${T}#a#b`, tii: `tii:${T}`, fragment: 'a#b' },
+  { input: `tii:${T}`, tii: `tii:${T}`, fragment: null },
+  { input: `TII:${T.toUpperCase()}#X`, tii: `tii:${T}`, fragment: 'X' },
+].map((c) => {
+  const r = id.parseTIIReference(c.input);
+  return {
+    ...c,
+    parsed_tii: r.tii,
+    parsed_fragment: r.fragment,
+    parseCanonicalTII_rejects_with: (() => {
+      try { id.parseCanonicalTII(c.input); return 'NO-THROW'; } catch (e) { return e.code; }
+    })(),
+    canonicalize_result: id.canonicalize(c.input),
+    resolution_url: id.resolutionUrl('https://resolver.example', c.input),
+    matches: r.tii === c.tii && r.fragment === c.fragment && id.canonicalize(c.input) === c.tii,
+  };
 });
 
 const out = {
@@ -84,6 +108,7 @@ const out = {
   base32_roundtrip: roundtrip,
   valid_canonical_identifiers: validCanonical,
   accepted_then_canonicalized: acceptedThenCanonicalized,
+  uri_references: uriReferences,
   rejected_inputs: rejected,
   resolution_urls_are_separate: {
     identifier: validCanonical[2],
@@ -94,11 +119,16 @@ const out = {
   },
   example_identifiers_non_normative: Array.from({ length: 3 }, () => id.generateIdentifier()),
   all_rejections_match: rejected.every((r) => r.matches),
+  all_uri_references_match: uriReferences.every((r) => r.matches),
   all_roundtrips_ok: roundtrip.every((r) => r.roundtrips && r.canonical_token),
 };
 
 const file = path.join(__dirname, 'test-vectors.json');
 fs.writeFileSync(file, JSON.stringify(out, null, 2) + '\n');
 console.log('wrote', file);
-console.log('roundtrips ok:', out.all_roundtrips_ok, '| rejections match:', out.all_rejections_match);
-if (!out.all_roundtrips_ok || !out.all_rejections_match) process.exit(1);
+console.log(
+  'roundtrips ok:', out.all_roundtrips_ok,
+  '| rejections match:', out.all_rejections_match,
+  '| uri-references match:', out.all_uri_references_match
+);
+if (!out.all_roundtrips_ok || !out.all_rejections_match || !out.all_uri_references_match) process.exit(1);

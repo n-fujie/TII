@@ -119,7 +119,7 @@ test('parse rejects every malformed input with a stable code — no fuzzy repair
     ['tii://' + good, 'authority'],
     ['tii:' + good + '/', 'path'],
     ['tii:' + good + '?x=1', 'query'],
-    ['tii:' + good + '#f', 'fragment'],
+    ['tii:' + good + '#f', 'has-fragment'], // a URI reference, not a canonical TII
     [good, 'missing-scheme'],
     ['doi:' + good, 'bad-scheme'],
     ['urn:tii:' + good, 'bad-scheme'],
@@ -131,6 +131,42 @@ test('parse rejects every malformed input with a stable code — no fuzzy repair
       `${JSON.stringify(input)} should throw ${code}, got ${(() => { try { id.parse(input); return 'no throw'; } catch (e) { return e.code; } })()}`
     );
   }
+});
+
+test('RFC 3986 fragment handling: a fragment is separated, not treated as an invalid TII', () => {
+  const s = id.generateIdentifier(); // tii:<token>
+  const token = id.parseCanonicalTII(s).token;
+
+  // strict canonical parser: a fragment means "not canonical" (distinct code)
+  assert.throws(() => id.parseCanonicalTII(s + '#section-3'), (e) => e.code === 'has-fragment');
+  assert.equal(id.isWellFormed(s + '#x'), false);
+
+  // URI-reference parser: fragment is split off per RFC 3986 §3.5
+  for (const [ref, frag] of [
+    [s + '#section-3', 'section-3'],
+    [s + '#', ''],
+    [s + '#a#b', 'a#b'], // everything after the first '#'
+    [s, null],
+  ]) {
+    const r = id.parseTIIReference(ref);
+    assert.equal(r.tii, s, 'underlying TII is the fragmentless identifier');
+    assert.equal(r.token, token, 'the token (registry key) is unaffected by the fragment');
+    assert.equal(r.fragment, frag);
+    assert.deepEqual(r.bytes, id.parseCanonicalTII(s).bytes);
+  }
+  assert.equal(id.isTIIReference(s + '#anything'), true);
+
+  // canonicalization removes the fragment; lookup is by the fragmentless TII
+  assert.equal(id.canonicalize(s + '#section-3'), s);
+  assert.equal(id.canonicalize('TII:' + token.toUpperCase() + '#X'), s);
+  assert.equal(id.canonicalize(id.canonicalize(s + '#x')), s); // idempotent
+
+  // the resolution URL never carries the fragment to the server
+  assert.equal(id.resolutionUrl('https://r.example', s + '#section-3'), 'https://r.example/tii/' + token);
+
+  // a fragment does not rescue an invalid token (base is still validated strictly)
+  assert.throws(() => id.parseTIIReference('tii:' + '0'.repeat(26) + '#f'), (e) => e.code === 'bad-char');
+  assert.throws(() => id.parseTIIReference('doi:' + token + '#f'), (e) => e.code === 'bad-scheme');
 });
 
 test('non-canonical Base32 tail (non-zero trailing bits) is rejected', () => {

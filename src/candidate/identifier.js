@@ -158,12 +158,14 @@ function isCanonicalToken(token) {
 }
 
 /**
- * Parse a TII reference into its parts, or throw TiiSyntaxError with a stable
- * `.code`. Accepts the scheme in any case (RFC 3986 §3.1) and the token in
- * upper or lower case; rejects everything else explicitly — no whitespace, no
- * Unicode, no percent-encoding, no padding, no query, no fragment, no path.
+ * Parse a **canonical TII** — exactly `tii:<token>` — into its parts, or throw
+ * TiiSyntaxError with a stable `.code`. Accepts the scheme in any case
+ * (RFC 3986 §3.1) and the token in upper or lower case; rejects everything else
+ * explicitly. A `#fragment` is a valid *URI reference* per RFC 3986 but is NOT
+ * part of a canonical TII — this parser reports `has-fragment` for it; use
+ * `parseTIIReference` to separate the fragment.
  */
-function parse(input) {
+function parseCanonicalTII(input) {
   if (typeof input !== 'string') throw new TiiSyntaxError('not-a-string', 'identifier must be a string');
   if (input.length === 0) throw new TiiSyntaxError('empty', 'empty identifier');
   if (/\s/.test(input)) throw new TiiSyntaxError('whitespace', 'identifier contains whitespace');
@@ -173,14 +175,16 @@ function parse(input) {
   const colon = input.indexOf(':');
   if (colon === -1) throw new TiiSyntaxError('missing-scheme', 'missing "tii:" scheme');
   const scheme = input.slice(0, colon);
-  let rest = input.slice(colon + 1);
+  const rest = input.slice(colon + 1);
   if (scheme.toLowerCase() !== SCHEME) {
     throw new TiiSyntaxError('bad-scheme', `scheme must be "${SCHEME}", got ${JSON.stringify(scheme)}`);
   }
   if (rest.startsWith('//')) throw new TiiSyntaxError('authority', 'TII has no authority component ("//")');
+  if (rest.includes('#')) {
+    throw new TiiSyntaxError('has-fragment', 'this is a URI reference with a fragment, not a canonical TII — use parseTIIReference');
+  }
   if (rest.includes('/')) throw new TiiSyntaxError('path', 'TII has no path component ("/")');
   if (rest.includes('?')) throw new TiiSyntaxError('query', 'TII has no query component ("?")');
-  if (rest.includes('#')) throw new TiiSyntaxError('fragment', 'TII has no fragment component ("#")');
   if (rest.includes('=')) throw new TiiSyntaxError('padding', 'Base32 padding ("=") is not allowed');
   if (!TOKEN_RE.test(rest)) {
     if (rest.length !== TOKEN_LENGTH) {
@@ -193,14 +197,58 @@ function parse(input) {
   return { scheme: SCHEME, token, bytes, canonical: `${SCHEME}:${token}` };
 }
 
-/** Return THE canonical string form, or throw. */
-function canonicalize(input) {
-  return parse(input).canonical;
+/** Back-compatible alias: `parse` is the strict canonical-TII parser. */
+const parse = parseCanonicalTII;
+
+/**
+ * Parse a **TII URI reference** per RFC 3986: split a trailing `#fragment`
+ * (everything from the first `#` to the end, RFC 3986 §3.5) BEFORE any
+ * TII-specific processing, then require the part before `#` to be a canonical
+ * TII. The fragment is a generic URI component: it is removed before
+ * resolution, it does not affect registry lookup, and TII assigns it no
+ * scheme-specific semantics.
+ *
+ *   parseTIIReference("tii:<token>")     → { tii, token, bytes, fragment: null }
+ *   parseTIIReference("tii:<token>#x")   → { tii, token, bytes, fragment: "x" }
+ *   parseTIIReference("tii:<token>#")    → { tii, token, bytes, fragment: "" }
+ */
+function parseTIIReference(input) {
+  if (typeof input !== 'string') throw new TiiSyntaxError('not-a-string', 'reference must be a string');
+  const hash = input.indexOf('#');
+  const base = hash === -1 ? input : input.slice(0, hash);
+  const fragment = hash === -1 ? null : input.slice(hash + 1);
+  const parsed = parseCanonicalTII(base);
+  return {
+    tii: parsed.canonical, // the underlying TII, fragment removed
+    token: parsed.token,
+    bytes: parsed.bytes,
+    fragment, // null if absent, "" if bare "#", else the fragment text (verbatim)
+  };
 }
 
+/**
+ * Return THE canonical identifier string for any acceptable reference form, or
+ * throw. A `#fragment`, if present, is removed (it is not part of the
+ * identifier and does not affect lookup). Idempotent.
+ */
+function canonicalize(input) {
+  return parseTIIReference(input).tii;
+}
+
+/** True iff `input` is already a canonical TII (no fragment, no deviation). */
 function isWellFormed(input) {
   try {
-    parse(input);
+    parseCanonicalTII(input);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** True iff `input` is a well-formed TII URI reference (fragment allowed). */
+function isTIIReference(input) {
+  try {
+    parseTIIReference(input);
     return true;
   } catch {
     return false;
@@ -208,11 +256,14 @@ function isWellFormed(input) {
 }
 
 /**
- * Build a resolution URL for a resolver base. The token is unchanged; the
+ * Build a resolution URL for a resolver base. Any `#fragment` is dropped from
+ * the lookup URL (RFC 3986: the fragment is not part of the request; a client
+ * may re-apply it to the returned representation). The token is unchanged; the
  * identifier does not depend on the resolver, its domain, host, or provider.
  */
 function resolutionUrl(resolverBase, idOrToken) {
-  const token = idOrToken.startsWith(SCHEME + ':') ? parse(idOrToken).token : parse(SCHEME + ':' + idOrToken).token;
+  const s = /^tii:/i.test(idOrToken) ? idOrToken : SCHEME + ':' + idOrToken;
+  const token = parseTIIReference(s).token;
   return resolverBase.replace(/\/+$/, '') + '/tii/' + token;
 }
 
@@ -231,7 +282,10 @@ module.exports = {
   issueIdentifier,
   isCanonicalToken,
   parse,
+  parseCanonicalTII,
+  parseTIIReference,
   canonicalize,
   isWellFormed,
+  isTIIReference,
   resolutionUrl,
 };

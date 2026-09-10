@@ -37,24 +37,46 @@ versioning, and succession.
 
 ## 2. Identifier syntax (ABNF)
 
-Per RFC 5234. Compatible with RFC 3986 (the token is composed entirely of
-`unreserved` characters; there is no authority, path, query, or fragment).
+Per RFC 5234. Compatible with RFC 3986. A **canonical TII** has no authority,
+path, or query; a `#fragment` is a generic RFC 3986 component and is **not part
+of the identifier** (§2.1).
 
 ```abnf
-tii-URI      = scheme ":" tii-token
-scheme       = %s"tii"            ; lowercase in canonical form;
-                                  ; RFC 3986 §3.1 makes it case-insensitive on input
-tii-token    = 25(base32-char) base32-final
-base32-char  = %x61-7A / "2" / "3" / "4" / "5" / "6" / "7"   ; a-z 2-7  (canonical: lowercase)
-base32-final = "a" / "e" / "i" / "m" / "q" / "u" / "y" / "4"
-                                  ; RFC 4648 §3.5 zero-tail rule for a 16-byte value
+tii              = scheme ":" tii-token       ; the canonical identifier
+scheme           = %s"tii"       ; lowercase in canonical form;
+                                 ; RFC 3986 §3.1 makes it case-insensitive on input
+tii-token        = 25(base32-char) base32-final
+base32-char      = %x61-7A / "2" / "3" / "4" / "5" / "6" / "7"   ; a-z 2-7 (canonical: lowercase)
+base32-final     = "a" / "e" / "i" / "m" / "q" / "u" / "y" / "4"
+                                 ; RFC 4648 §3.5 zero-tail rule for a 16-byte value
+
+tii-reference    = tii [ "#" fragment ]       ; an RFC 3986 URI reference to a TII
+fragment         = *( pchar / "/" / "?" )     ; RFC 3986 §3.5, verbatim; not interpreted by TII
 ```
 
-On input the token MAY additionally use `A-Z` / (equivalently `%x41-5A`) for the
+On input the token MAY additionally use `A-Z` (equivalently `%x41-5A`) for the
 Base32 letters; a parser normalizes them to lowercase (§7). No other input form
 is accepted.
 
 Total length of a canonical TII: `4 + 26 = 30` characters.
+
+### 2.1 Fragments (RFC 3986)
+
+A reference of the form `tii:<token>#<fragment>` is a valid **URI reference**.
+The fragment:
+
+- is governed by RFC 3986 §3.5, not by TII;
+- is separated **before** any TII scheme-specific processing — everything from
+  the first `#` to the end of the string is the fragment;
+- is **removed before resolution** and does **not** affect registry lookup;
+- carries **no TII-specific semantics** — TII assigns none, and an
+  implementation MUST NOT invent any.
+
+The *canonical TII* underlying `tii:<token>#x` is `tii:<token>`. A strict parser
+for the canonical form (`parseCanonicalTII`) reports `has-fragment` for a
+fragmented input — it is a URI reference, not a canonical TII — while a
+reference parser (`parseTIIReference`) returns the underlying `tii` and the
+separated `fragment`. Canonicalization (§6) drops the fragment.
 
 ## 3. Generation algorithm
 
@@ -115,33 +137,51 @@ and for arbitrary 16-byte inputs.
 There is exactly one canonical textual representation of any valid TII:
 `tii:` + 26 lowercase Base32 characters.
 
-A canonicalizer:
+A canonicalizer takes any acceptable reference form and returns the canonical
+identifier, or throws:
 
-1. rejects any input containing whitespace (`whitespace`), `%` (`percent-encoding`),
-   or any non-ASCII byte (`non-ascii`);
-2. splits on the first `:`; requires the scheme to be `tii` case-insensitively
+1. if a `#` is present, separate the fragment (RFC 3986 §3.5: from the first
+   `#` to the end) and set it aside — it is **not** part of the identifier;
+2. reject any remaining input containing whitespace (`whitespace`), `%`
+   (`percent-encoding`), or any non-ASCII byte (`non-ascii`);
+3. split on the first `:`; require the scheme to be `tii` case-insensitively
    (`missing-scheme` / `bad-scheme`);
-3. rejects a remainder beginning `//` (`authority`), or containing `/`
-   (`path`), `?` (`query`), `#` (`fragment`), or `=` (`padding`);
-4. requires exactly 26 alphabet characters (`bad-length` / `bad-char`);
-5. Base32-decodes with the zero-tail rule (`non-canonical-tail`);
-6. lowercases the scheme and token and returns `tii:` + token.
+4. reject a remainder beginning `//` (`authority`), or containing `/` (`path`),
+   `?` (`query`), or `=` (`padding`);
+5. require exactly 26 alphabet characters (`bad-length` / `bad-char`);
+6. Base32-decode with the zero-tail rule (`non-canonical-tail`);
+7. lowercase the scheme and token and return `tii:` + token (the fragment, if
+   any, is discarded).
 
-Canonicalization is **idempotent**. Copy/paste that introduces surrounding
-whitespace is rejected, not trimmed — callers trim before canonicalizing if they
-intend to. There are no version numbers or metadata after the token; a future
-spec that needs a compound reference construct MUST define it as an
-*independent* syntax, not an extension of `tii:<token>`.
+The strict form `parseCanonicalTII` performs steps 2–7 and additionally rejects
+a fragment with `has-fragment` (it is a URI reference, not a canonical TII).
+`parseTIIReference` performs step 1 then 2–7 and returns both the canonical
+`tii` and the separated `fragment`.
+
+Canonicalization is **idempotent**. Surrounding whitespace is rejected, not
+trimmed — callers trim first if they intend to. There are no version numbers or
+metadata after the token; a future spec that needs a compound reference
+construct MUST define it as an *independent* syntax, not an extension of
+`tii:<token>`.
 
 ## 7. Validation & parse errors
 
-A parser returns `{ scheme, token, bytes, canonical }` or throws with a stable
-`code`. Codes (see `test-vectors.json`): `empty`, `not-a-string`, `whitespace`,
-`percent-encoding`, `non-ascii`, `missing-scheme`, `bad-scheme`, `authority`,
-`path`, `query`, `fragment`, `padding`, `bad-length`, `bad-char`,
-`non-canonical-tail`.
+Two parsers:
 
-`isWellFormed(x)` is `true` iff `parse(x)` succeeds.
+- `parseCanonicalTII(input)` → `{ scheme, token, bytes, canonical }` or throws.
+  Strict: only `tii:<token>`.
+- `parseTIIReference(input)` → `{ tii, token, bytes, fragment }` or throws.
+  RFC 3986 URI reference: an optional trailing `#fragment` is separated first;
+  `fragment` is `null` when absent, `""` for a bare `#`, else the verbatim text.
+
+Stable error `code`s (see `test-vectors.json`): `empty`, `not-a-string`,
+`whitespace`, `percent-encoding`, `non-ascii`, `missing-scheme`, `bad-scheme`,
+`authority`, `path`, `query`, `padding`, `bad-length`, `bad-char`,
+`non-canonical-tail`, and — from `parseCanonicalTII` only — `has-fragment`
+(the input is a URI reference with a fragment; use `parseTIIReference`).
+
+`isWellFormed(x)` is `true` iff `parseCanonicalTII(x)` succeeds.
+`isTIIReference(x)` is `true` iff `parseTIIReference(x)` succeeds.
 
 ## 8. Collision handling & issuance
 
@@ -198,6 +238,12 @@ by case:
 Unknown, invalid, withdrawn, and invalidly-issued identifiers MUST remain
 mutually distinguishable.
 
+If the input is a URI reference `tii:<token>#<fragment>`, the resolver strips
+the fragment before lookup (RFC 3986: the fragment is not sent to the server).
+Registry lookup and the responses above are by the fragmentless `tii:<token>`.
+A client MAY re-apply the fragment to the returned representation; the resolver
+assigns it no meaning.
+
 ## 11. Withdrawal
 
 A withdrawal is an **appended event** (`tii.retracted` / a withdrawal record).
@@ -239,6 +285,11 @@ relative to a known head but does not attest *who* produced it. Production adds
 periodic **Ed25519**-signed checkpoints (RFC 8032), via standard runtime crypto
 (`node:crypto`). No blockchain, token, or cryptoasset.
 
+The event-chain canonicalization (repository `src/canonical.js`) and the
+checkpoint canonicalization (§17, RFC 8785 JCS) are **separate**. The ledger
+format is not migrated or changed: every existing event hash already fixes it.
+Checkpoints are a new artifact and adopt the cross-implementation standard.
+
 ## 16. Key management & rotation
 
 Keys are managed independently of identifier identity. A **keyset** lists, per
@@ -265,22 +316,30 @@ A checkpoint object minimally binds:
   "spec_version": "<x.y.z|null>" }
 ```
 
-The bytes signed are `canonicalJSON(checkpoint)` (deterministic, key-sorted —
-repository `src/canonical.js`). Never sign rendered HTML or an unstable
-serialization.
+**Normative signing input:** the UTF-8 bytes of the **RFC 8785 (JSON
+Canonicalization Scheme, JCS)** canonicalization of the checkpoint object. JCS
+fixes: whitespace (none), property order (sorted by UTF-16 code units of the
+name), number serialization (ECMAScript `Number::toString`), and minimal string
+escaping; and it requires **duplicate property names to be rejected** before the
+content is signed or verified. Never sign rendered HTML or an unstable
+serialization. Reference implementation: `src/candidate/jcs.js`
+(`canonicalize` + a strict, duplicate-rejecting `parse`).
 
 A signed checkpoint file:
 
 ```jsonc
 { "tii_signed_checkpoint": "1", "algorithm": "ed25519",
-  "canonicalization": "json-sorted-keys",
+  "canonicalization": "RFC8785-JCS",
   "key_id": "<hex16>", "public_key": "<PEM>",
   "checkpoint": { … }, "signature": "<base64>" }
 ```
 
-Signed checkpoints are ordinary UTF-8 files. Verification requires only the file
-(self-describing) or a keyset file — **not** Vercel, the production database, a
-proprietary API, or the original UI. Reference: `src/candidate/checkpoint.js`.
+Signed checkpoints are ordinary UTF-8 files; the on-disk form MAY be
+pretty-printed (whitespace does not affect verification — the signing input is
+JCS of `.checkpoint`). Verification requires only the file (self-describing) or a
+keyset file — **not** Vercel, the production database, a proprietary API, or the
+original UI. A re-imported file with a duplicate property is rejected at parse
+time. References: `src/candidate/checkpoint.js`, `src/candidate/jcs.js`.
 
 ## 18. External witnesses
 
@@ -377,6 +436,11 @@ tii:aaaqeayeaudaocajbifqydiob4          (canonical; decodes to 000102…0f)
 tii:AAAQEAYEAUDAOCAJBIFQYDIOB4          (accepted on input → normalises to the above)
 tii:77777777777777777777777774          (canonical; decodes to ff…ff)
 
+tii:aaaqeayeaudaocajbifqydiob4#note-2   (a URI reference; underlying TII is
+                                        tii:aaaqeayeaudaocajbifqydiob4;
+                                        fragment "note-2" is not part of the
+                                        identifier and does not affect lookup)
+
 https://resolver.example/tii/aaaqeayeaudaocajbifqydiob4     (a resolution URL, not the identifier)
 ```
 
@@ -390,7 +454,9 @@ Illustrative only — none of these are issued.
   folding, no reserved characters.
 - The full archival export is: the JSONL ledger, the signed checkpoint files,
   and the keyset file — all plain UTF-8. Any implementation can reconstruct
-  derived state and re-verify both the SHA-256 chain and the Ed25519 signatures.
+  derived state, re-verify the SHA-256 event chain (using the ledger's own
+  canonicalization), and re-verify the Ed25519 checkpoint signatures (using
+  RFC 8785 JCS of each `checkpoint` object) with no shared code.
 
 ## 28. IANA considerations
 
@@ -404,8 +470,10 @@ governance and MUST NOT be hard-coded before then.
 
 ## Appendix A. Reference implementation
 
-`src/candidate/identifier.js` (syntax) and `src/candidate/checkpoint.js`
-(signing). Tests: `test/candidate-identifier.test.js`,
+`src/candidate/identifier.js` (syntax; `parseCanonicalTII` /
+`parseTIIReference`), `src/candidate/jcs.js` (RFC 8785 JCS canonicalize + strict
+parser), `src/candidate/checkpoint.js` (Ed25519 signing over JCS). Tests:
+`test/candidate-identifier.test.js`, `test/candidate-jcs.test.js`,
 `test/candidate-checkpoint.test.js`. Vectors: `spec/test-vectors.json`
 (regenerate: `node spec/gen-test-vectors.js`). None of these are imported by the
 running system; production issuance is disabled.

@@ -132,3 +132,68 @@ test('checkpoint binds the required fields', () => {
     assert.ok(k in c, `checkpoint must bind ${k}`);
   }
 });
+
+test('RFC 8785 JCS: the signing input is property-order and whitespace independent', () => {
+  const { publicKeyPem, privateKeyPem } = cp.generateKeypair();
+  const signed = cp.signCheckpoint(sampleCheckpoint(), privateKeyPem, { publicKeyPem });
+  assert.equal(signed.canonicalization, 'RFC8785-JCS');
+
+  // reorder every property of the checkpoint before verifying
+  const c = signed.checkpoint;
+  const reordered = {
+    spec_version: c.spec_version,
+    created_at: c.created_at,
+    tii_checkpoint: c.tii_checkpoint,
+    event_count: c.event_count,
+    ledger_head_hash: c.ledger_head_hash,
+  };
+  assert.equal(cp.verifySignedCheckpoint({ ...signed, checkpoint: reordered }).ok, true);
+
+  // pretty-print the whole file, then re-import and verify
+  const fileText = JSON.stringify(signed, null, 4).replace(/\n/g, '\r\n') + '\n\n';
+  assert.equal(cp.verifySignedCheckpoint(cp.deserialize(fileText)).ok, true);
+});
+
+test('RFC 8785 JCS: Unicode and numeric-edge checkpoint fields verify across a round trip', () => {
+  const { publicKeyPem, privateKeyPem } = cp.generateKeypair();
+  const ck = cp.buildCheckpoint({
+    ledgerHeadHash: 'a'.repeat(64),
+    eventCount: Number.MAX_SAFE_INTEGER,
+    specVersion: '1.0.0',
+    createdAt: '2026-06-01T00:00:00.000Z',
+    extra: { note: '遷移発火 — checkpoint', ratio: 0.1, big: 1e30 },
+  });
+  const signed = cp.signCheckpoint(ck, privateKeyPem, { publicKeyPem });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tii-ckpt-u-'));
+  const file = path.join(dir, 'c.json');
+  fs.writeFileSync(file, cp.serialize(signed));
+  const back = cp.deserialize(fs.readFileSync(file, 'utf8'));
+  assert.equal(cp.verifySignedCheckpoint(back).ok, true);
+  assert.equal(back.checkpoint.extra.note, '遷移発火 — checkpoint');
+  assert.equal(back.checkpoint.event_count, Number.MAX_SAFE_INTEGER);
+});
+
+test('a re-imported checkpoint file with a duplicate property is rejected before verification', () => {
+  const { publicKeyPem, privateKeyPem } = cp.generateKeypair();
+  const signed = cp.signCheckpoint(sampleCheckpoint(), privateKeyPem, { publicKeyPem });
+  const text = cp.serialize(signed).replace(
+    '"event_count": 10,',
+    '"event_count": 10,\n    "event_count": 99,'
+  );
+  assert.throws(() => cp.deserialize(text), (e) => e.code === 'duplicate-key');
+});
+
+test('export / reconstruct: verification depends on nothing but the files', () => {
+  const { publicKeyPem, privateKeyPem, keyId } = cp.generateKeypair();
+  const signed = cp.signCheckpoint(sampleCheckpoint(), privateKeyPem, { publicKeyPem, keyId });
+  const keyset = [{ key_id: keyId, public_key_pem: publicKeyPem, not_before: '2026-01-01T00:00:00.000Z' }];
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tii-kit-'));
+  fs.writeFileSync(path.join(dir, 'checkpoint-000010.json'), cp.serialize(signed));
+  fs.writeFileSync(path.join(dir, 'keyset.json'), JSON.stringify(keyset, null, 2) + '\n');
+
+  // "another implementation": only the two files, nothing else
+  const loadedCk = cp.deserialize(fs.readFileSync(path.join(dir, 'checkpoint-000010.json'), 'utf8'));
+  const loadedKs = JSON.parse(fs.readFileSync(path.join(dir, 'keyset.json'), 'utf8'));
+  assert.equal(cp.verifySignedCheckpoint(loadedCk, { keyset: loadedKs }).ok, true);
+});

@@ -11,12 +11,21 @@
  *   → signed checkpoint published as ordinary files in independent locations
  *
  * Ed25519 via node:crypto (RFC 8032). No third-party crypto, no invented
- * algorithm. Canonical JSON (shared src/canonical.js) is signed — never
- * rendered HTML.
+ * algorithm.
+ *
+ * CANONICALIZATION — normative rule:
+ *   checkpoint signing input = UTF-8 bytes of the RFC 8785 (JSON Canonicalization
+ *   Scheme, JCS) canonicalization of the checkpoint JSON object.
+ * This is deliberately SEPARATE from the historical ledger hash-chain
+ * canonicalization (src/canonical.js), which is unchanged and not migrated.
+ * JCS gives property-order, whitespace and representation independence and
+ * rejects duplicate property names — the properties a cross-implementation
+ * verifier needs. Rendered HTML is never signed.
  */
 
 const crypto = require('node:crypto');
-const { canonicalize, stripUndefined } = require('../canonical');
+const { stripUndefined } = require('../canonical');
+const jcs = require('./jcs');
 
 const CHECKPOINT_FORMAT = '1';
 const ALGORITHM = 'ed25519';
@@ -57,9 +66,9 @@ function buildCheckpoint({ ledgerHeadHash, eventCount, specVersion, createdAt, e
   });
 }
 
-/** Deterministic bytes that get signed / verified. */
+/** Deterministic bytes that get signed / verified: RFC 8785 JCS, UTF-8. */
 function checkpointBytes(checkpoint) {
-  return Buffer.from(canonicalize(checkpoint), 'utf8');
+  return Buffer.from(jcs.canonicalize(checkpoint), 'utf8');
 }
 
 function signCheckpoint(checkpoint, privateKeyPem, opts = {}) {
@@ -71,7 +80,7 @@ function signCheckpoint(checkpoint, privateKeyPem, opts = {}) {
   return {
     tii_signed_checkpoint: CHECKPOINT_FORMAT,
     algorithm: ALGORITHM,
-    canonicalization: 'json-sorted-keys',
+    canonicalization: 'RFC8785-JCS',
     key_id: opts.keyId || keyId(publicKeyPem),
     public_key: publicKeyPem,
     checkpoint,
@@ -130,13 +139,21 @@ function fail(reason) {
 
 /* ----------------------------------------------------- file portability --- */
 
-/** Serialize to a plain UTF-8 JSON file body. */
+/**
+ * Serialize to a plain UTF-8 JSON file body. The on-disk form MAY be
+ * pretty-printed; it is not the signing input (that is JCS of `.checkpoint`),
+ * so whitespace in the file does not affect verification.
+ */
 function serialize(signed) {
   return JSON.stringify(signed, null, 2) + '\n';
 }
 
+/**
+ * Parse a checkpoint file. Uses the JCS strict parser, which rejects duplicate
+ * property names (RFC 8785 §3.1) before the content is ever verified.
+ */
 function deserialize(text) {
-  return JSON.parse(text);
+  return jcs.parse(text);
 }
 
 module.exports = {
