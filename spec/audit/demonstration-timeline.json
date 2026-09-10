@@ -1,0 +1,162 @@
+{
+  "generated_at": "2026-09-10T16:59:44.555Z",
+  "tii": "tii:etw6ctydkcak",
+  "identifier_status": "test",
+  "timeline": [
+    {
+      "seq": 0,
+      "event_type": "tii.issued",
+      "module": null,
+      "act": null,
+      "by": "n-fujie",
+      "label": "issue test TII"
+    },
+    {
+      "seq": 1,
+      "event_type": "interpretation.revised",
+      "module": "interpretation",
+      "act": null,
+      "by": "n-fujie",
+      "label": "record Japanese description (interpretation)"
+    },
+    {
+      "seq": 2,
+      "event_type": "evidence.referenced",
+      "module": "evidence",
+      "act": "introduce",
+      "by": "n-fujie",
+      "label": "add evidence reference"
+    },
+    {
+      "seq": 3,
+      "event_type": "address.described",
+      "module": "address",
+      "act": "introduce",
+      "by": "n-fujie",
+      "label": "add address (public location)"
+    },
+    {
+      "seq": 4,
+      "event_type": "domain.described",
+      "module": "domain",
+      "act": "introduce",
+      "by": "n-fujie",
+      "label": "add domain description"
+    },
+    {
+      "seq": 5,
+      "event_type": "ignition.described",
+      "module": "ignition",
+      "act": "introduce",
+      "by": "n-fujie",
+      "label": "record ignition interpretation"
+    },
+    {
+      "seq": 6,
+      "event_type": "transition.described",
+      "module": "transition",
+      "act": "introduce",
+      "by": "n-fujie",
+      "label": "record transition interpretation"
+    },
+    {
+      "seq": 7,
+      "event_type": "external.ref.added",
+      "module": "external_identifier",
+      "act": "introduce",
+      "by": "n-fujie",
+      "label": "add external identifier (DOI)"
+    },
+    {
+      "seq": 8,
+      "event_type": "relation.asserted",
+      "module": "relation",
+      "act": "introduce",
+      "by": "n-fujie",
+      "label": "add relation (stored-by)"
+    },
+    {
+      "seq": 9,
+      "event_type": "localization.added",
+      "module": "localization",
+      "act": null,
+      "by": "translator",
+      "label": "add English translation of the ja interpretation"
+    },
+    {
+      "seq": 10,
+      "event_type": "address.described",
+      "module": "address",
+      "act": "stop",
+      "by": "n-fujie",
+      "label": "change address (host-1 stopped, host-2 introduced)"
+    },
+    {
+      "seq": 12,
+      "event_type": "ignition.disputed",
+      "module": "ignition",
+      "act": "dispute",
+      "by": "reviewer",
+      "label": "contest the ignition interpretation"
+    },
+    {
+      "seq": 13,
+      "event_type": "branch.recorded",
+      "module": "series",
+      "act": "introduce",
+      "by": "n-fujie",
+      "label": "branch interpretation"
+    },
+    {
+      "seq": 14,
+      "event_type": "merge.recorded",
+      "module": "series",
+      "act": "introduce",
+      "by": "n-fujie",
+      "label": "merge later interpretation"
+    },
+    {
+      "seq": 15,
+      "event_type": "stewardship.transferred",
+      "module": "stewardship",
+      "act": "replace",
+      "by": "n-fujie",
+      "label": "record stewardship transfer description"
+    },
+    {
+      "seq": 16,
+      "event_type": "transition.withdrawn",
+      "module": "transition",
+      "act": "withdraw",
+      "by": "n-fujie",
+      "label": "withdraw the transition classification"
+    }
+  ],
+  "preserved": {
+    "identifier_unchanged": true,
+    "identifier_status": "test",
+    "total_events": 17,
+    "every_event_retained": true,
+    "original_issue_event_hash_unchanged": true,
+    "authored_japanese_still_there": true,
+    "english_projection": "This reference point tracks how the description of an object of analysis changed over time",
+    "japanese_projection_falls_back_to_authored": true,
+    "ignition_present_and_disputed": true,
+    "transition_withdrawn": true,
+    "current_addresses": [
+      "https://host-2.example/x"
+    ],
+    "old_address_in_history": true,
+    "external_ids": [
+      "doi:10.9999/demo"
+    ],
+    "relations": [
+      "stores"
+    ],
+    "series_branch_and_merge_records": 2,
+    "stewardship_records": 1,
+    "verify_ok_after_reconstruction": true,
+    "head_hash_identical": true,
+    "static_build_left_ledger_byte_identical": true
+  }
+}

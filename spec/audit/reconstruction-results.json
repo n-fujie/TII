@@ -1,0 +1,72 @@
+{
+  "generated_at": "2026-09-10T16:59:56.192Z",
+  "§32_reconstruction": {
+    "method": "export ledger.jsonl/json/csv only; copy src/+bin/+package.json to a fresh dir; run CLI verify/list/rebuild-static; re-load and project",
+    "survived": {
+      "all_tii_strings": true,
+      "head_hash_identical": true,
+      "verify_ok": true,
+      "event_count_identical": true,
+      "localization_survived": true,
+      "authored_ja_survived": true,
+      "external_id_survived": true,
+      "optional_modules_survived": true,
+      "unknown_vocab_survived": true,
+      "evidence_survived": true,
+      "public_pages_rebuilt": true
+    },
+    "npm_dependencies": {},
+    "node_modules_present_in_repo": false,
+    "external_binaries_used_by_reconstruction": [
+      "node (>=18)"
+    ],
+    "undocumented_dependencies_found": "none — reconstruction needs only Node.js and the ledger.jsonl",
+    "conclusion": "PASS. Everything survives. Zero npm dependencies. No original DB, server, or service state needed. The ledger.jsonl file + the (open) source + Node.js are sufficient."
+  },
+  "§33_hosting_loss": {
+    "scenario": "Vercel disappears",
+    "what_survives": "Everything. The service is `node src/server.js` (zero deps) or a static export. `node bin/tii.js rebuild-static` produces the whole site from ledger.jsonl. No TII token changes. Verified: CLI + rebuild-static run in the fresh dir with no hosting.",
+    "what_requires_action": "Point TII_RESOLVER_BASE_URL at a new host and redeploy (one env var). Nothing else.",
+    "status": "PASS — hosting is not identity."
+  },
+  "§34_domain_loss_model": {
+    "scenario": "the (future) permanent resolver domain is unavailable",
+    "still_usable_now": {
+      "raw tii:<token>": "YES — it is a string; it contains no domain",
+      "exported registry (ledger.jsonl / catalog.json)": "YES — self-contained",
+      "signed checkpoint": "CANDIDATE ONLY — not produced by the live system",
+      "independent mirrors": "CONCEPT ONLY — no mirror protocol implemented; a mirror is just another copy of ledger.jsonl",
+      "local reconstruction": "YES — demonstrated in §32"
+    },
+    "requires_future_permanent_domain": [
+      "a stable citable specification URL",
+      "resolver role email addresses",
+      "IANA \"specification\" reference URL"
+    ],
+    "status": "PARTIAL — identifier + records survive a domain loss today; the parts that need the permanent domain are documentation/governance, not identifier function."
+  },
+  "§35_complete_operator_loss": {
+    "scenario": "P/A Institute + hosting + registrar account + maintainers all gone",
+    "given": [
+      "public specification",
+      "exported ledger.jsonl",
+      "source code (open)",
+      "CANDIDATE public keys / signed checkpoints (NOT produced live)",
+      "independent copies"
+    ],
+    "another_party_could_reconstruct": [
+      "every tii:<token> string (unchanged)",
+      "every historical event, in order, with hashes",
+      "the full derived state / resolution pages (rebuild-static)",
+      "all localizations, external identifiers, optional modules",
+      "the SHA-256 chain self-consistency (verify)"
+    ],
+    "another_party_could_NOT_do": [
+      "prove the ledger was not rewritten before they received it — there is no live signed checkpoint or external timestamp anchor (see §26). They would trust whatever copy they got.",
+      "recover the resolver domain / registrar account (no succession custody of an auth code is implemented — it is only described in spec/domain-failure-and-recovery.md)",
+      "continue signed-checkpoint publication (no key custody, no keyset — CANDIDATE only)",
+      "assume the IANA change-controller role (governance is candidate-only)"
+    ],
+    "status": "PARTIAL — the IDENTIFIERS and the RECORD survive completely; the TRUST ANCHOR and the GOVERNANCE/DOMAIN custody do not exist yet."
+  }
+}

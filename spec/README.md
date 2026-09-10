@@ -20,6 +20,16 @@ preparing the resolver domain, governance identity, and IANA registration —
 | [`succession-policy.md`](succession-policy.md) | TII Succession Policy (candidate). |
 | [`test-vectors.json`](test-vectors.json) | Machine-readable identifier test vectors, incl. RFC 3986 `uri_references` (fragment handling). Regenerate: `node spec/gen-test-vectors.js`. |
 | [`gen-test-vectors.js`](gen-test-vectors.js) | Vector generator (uses `src/candidate/identifier.js`). |
+| [`capability-boundary-audit.md`](capability-boundary-audit.md) | **Empirical audit of what the implementation actually does today** — capability matrix, known failures + blocker classification, evidence-cited scorecard, the four "can / candidate / spec-only / must-not-claim" lists, and the final questions answered. 34 capabilities: 24 PASS, 5 PARTIAL, 2 FAIL, 1 NOT IMPLEMENTED, 2 CANDIDATE ONLY. |
+| [`capability-matrix.json`](capability-matrix.json) | Machine-readable matrix; every PASS backed by an executed test. |
+| [`performance-results.json`](performance-results.json) | §30/§31 large-payload + scale measurements (100 / 1,000 / 10,000 TIIs). |
+| [`security-test-results.md`](security-test-results.md) | §21 input-security — 22 code-shaped payloads × every output surface. Verdict: no execution/structural-corruption path. |
+| [`audit/`](audit/) | The audit harnesses (`*-audit.js`, `demonstration.js`) + their raw run outputs. Isolated temp ledgers only; `data/ledger.jsonl` is never touched. |
+
+The audit's reproducible subset runs under `node --test`
+(`test/capability-regression.test.js`). It documents the boundary including the
+known negatives (§26 full-chain forgery undetectable by `verify()` alone; §27
+crash; §40 no privacy).
 
 Reference implementation of the candidate profile: `src/candidate/`
 (not imported by the running system):

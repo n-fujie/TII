@@ -1,0 +1,143 @@
+{
+  "generated_at": "2026-09-10T16:54:59.927Z",
+  "results": [
+    {
+      "test": "§25 Ledger tampering — what verify() detects",
+      "method": "mutate a stored line in a disposable copy, reload, verify()",
+      "cases": {
+        "modify_one_historical_byte": {
+          "detected": true,
+          "problems": [
+            "content hash mismatch (event body altered)"
+          ]
+        },
+        "modify_one_historical_field_recorder": {
+          "detected": true,
+          "problems": [
+            "content hash mismatch (event body altered)"
+          ]
+        },
+        "remove_one_event": {
+          "detected": true,
+          "problems": [
+            "seq 3 != position 2",
+            "prev_hash does not match previous event hash",
+            "seq 4 != position 3",
+            "seq 5 != position 4"
+          ]
+        },
+        "reorder_two_events": {
+          "detected": true,
+          "problems": [
+            "seq 3 != position 2",
+            "prev_hash does not match previous event hash",
+            "seq 2 != position 3",
+            "prev_hash does not match previous event hash",
+            "prev_hash does not match previous event hash"
+          ]
+        },
+        "duplicate_an_event": {
+          "detected": true,
+          "problems": [
+            "seq 3 != position 4",
+            "prev_hash does not match previous event hash",
+            "seq 4 != position 5",
+            "seq 5 != position 6"
+          ]
+        },
+        "change_prev_hash": {
+          "detected": true,
+          "problems": [
+            "prev_hash does not match previous event hash",
+            "content hash mismatch (event body altered)"
+          ]
+        },
+        "change_current_hash": {
+          "detected": true,
+          "problems": [
+            "content hash mismatch (event body altered)",
+            "prev_hash does not match previous event hash"
+          ]
+        },
+        "truncate_final_line": {
+          "detected": true,
+          "problems": [
+            "load threw: Unterminated string in JSON at position 491 (line 1 column 492)"
+          ]
+        },
+        "append_malformed_json": {
+          "detected": true,
+          "problems": [
+            "load threw: Expected property name or '}' in JSON at position 1 (line 1 column 2)"
+          ]
+        },
+        "append_valid_json_no_chain_link": {
+          "detected": true,
+          "problems": [
+            "prev_hash does not match previous event hash",
+            "content hash mismatch (event body altered)"
+          ]
+        }
+      },
+      "conclusion": "verify() recomputes seq position, prev_hash linkage, and the content hash of every event. It catches single-byte/field edits, deletion, reordering, duplication, prev_hash/hash edits, and a chain-break on an appended event. A truncated final line or malformed JSON makes load() throw (the whole ledger fails to parse) — detected, but as a hard load failure, not a graceful \"problems\" report."
+    },
+    {
+      "test": "§26 FULL-CHAIN REGENERATION ATTACK",
+      "method": "take a disposable copy of the whole ledger, rewrite event #2, recompute a fully internally-consistent SHA-256 chain for every later event",
+      "legit_head": "2b536995bb5c28bd3f7fccdfea3223989f62897473ee6094adafbb86724e7ee7",
+      "forged_head": "791f99b70a1d2c70c09021eb6adcdbe3663c619281201870639dfb18da33de2a",
+      "forged_verify_ok": true,
+      "forged_verify_problems": [],
+      "can_verify_alone_distinguish_forged_from_legit": false,
+      "finding_1": "NO. verify() on the forged ledger returns { ok: true, problems: [] }. The SHA-256 chain is self-consistent; verify() has no external anchor, so it CANNOT distinguish a legitimately-grown chain from a fully-recomputed forged one. Anyone with write access to ledger.jsonl (or who serves a copy) can rewrite history undetectably as far as verify() is concerned.",
+      "signed_checkpoint_catches_it": true,
+      "finding_2": "YES — but only via the CANDIDATE signed checkpoint, which is NOT wired into the live system. A checkpoint signed over the real head (2b536995bb5c28bd…) does not match the forged head (791f99b70a1d2c70…). A verifier holding the signed checkpoint detects the forgery. The LIVE service publishes no such checkpoint.",
+      "production_impact": "Without an independently-published signed checkpoint (or an external timestamp/witness), TII ledger integrity today is only as strong as write-access control to the single file. This is the single most important gap for production."
+    },
+    {
+      "test": "§27 Crash consistency",
+      "cases": {
+        "partial_line_on_load": "load() THROWS: Unterminated string in JSON at position 57 (line 1 column 58)  → the ENTIRE ledger fails to load; the last complete write is not recoverable without manual truncation",
+        "terminate_before_write": "fs.appendFileSync is synchronous and atomic for small writes on local fs: either the whole line lands or nothing does. A crash BEFORE the syscall loses that one event with no corruption.",
+        "terminate_mid_write": "A crash DURING the syscall (large line, disk full, signal) can leave a partial final line → see partial_line_on_load: the whole ledger then fails to parse on next start.",
+        "duplicate_request": "two identical append() calls produce TWO events (evt_yn8vx13s36mf15vr and evt_djex84fe8jwhra73), both with content.text \"same request\", different seq/event_id/hash. There is NO idempotency key, dedup, or request-id. verify() stays ok. A client that retries after a lost response silently double-records."
+      },
+      "detected_by_verify": "verify() does NOT run automatically on load; a partial/corrupt tail throws in load() (JSON.parse). There is no journaling, no fsync, no atomic rename, no recovery of a truncated tail.",
+      "production_impact": "MEDIUM–HIGH. A single interrupted write bricks the ledger until someone manually removes the partial last line. Duplicate events from client retries are silent."
+    },
+    {
+      "test": "§28 Concurrency (in-process)",
+      "in_process_single_writer": {
+        "unique_seqs": true,
+        "monotonic_from_zero": true,
+        "verify_ok": true
+      },
+      "explanation": "append() reads nextSeq / lastHash and does fs.appendFileSync with NO await in between. Node is single-threaded, so many append() calls in ONE process serialize cleanly.",
+      "multi_process": "See spec/audit/concurrency-test.js — spawns N separate OS processes writing the SAME ledger.jsonl."
+    },
+    {
+      "test": "§29 Clock",
+      "accepts_any_timestamp": "YES — no validation. recorded_at may be past, far future, backward-jumping, or absent (defaults to new Date().toISOString()). Timezone offsets are accepted as written and NOT normalized to UTC (e2/e5 kept their form).",
+      "ordering_basis": "seq (append order), not wall-clock. projection sorts by e.seq. Event order in history = [1,2,3,4,5] i.e. append order regardless of the nonsensical recorded_at values.",
+      "ledger_written_at": "always set to the real append time by the ledger; recorded_at is the caller's claim.",
+      "risk": "LOW for integrity/ordering (seq-based). MEDIUM for display: the resolution page shows recorded_at dates, so a bad client clock shows a wrong/misleading date on an event, and \"Last recorded event\" date can look out of order.",
+      "verify_ok": true
+    },
+    {
+      "test": "§21 Input security (overview)",
+      "method": "15 code-shaped payloads in event content + 2 hostile address values; render resolution + registry HTML",
+      "findings": {
+        "rendered_html_contains_live_script_tag": false,
+        "rendered_html_contains_unescaped_svg_onload": false,
+        "js_url_rendered_as_live_anchor_href": false,
+        "evil_http_breaks_out_of_attribute": false,
+        "raw_lt_gt_in_output": false,
+        "long_string_present": true,
+        "null_byte_in_html": true,
+        "registry_escaped": false
+      },
+      "assessment": "No execution path found: views.esc() escapes & < > \" everywhere content is interpolated; address values are only linked when /^https?:\\/\\// and the href is esc()-quoted; javascript:/data: are shown as plain text. Long strings and null/control/bidi bytes pass through as inert text (no execution, no structural corruption of the HTML or the JSONL).",
+      "note": "Text is treated as data, not rejected for looking like code — matches the spec requirement."
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-09-10T16:59:56.489Z",
+  "appends_per_writer": 10,
+  "results": [
+    {
+      "writers": 2,
+      "expected_events": 21,
+      "lines": 21,
+      "corrupt_lines": 0,
+      "json_events": 21,
+      "duplicate_seq_numbers": 1,
+      "prev_hash_chain_breaks": 1,
+      "verify_ok": false
+    },
+    {
+      "writers": 10,
+      "expected_events": 101,
+      "lines": 101,
+      "corrupt_lines": 0,
+      "json_events": 101,
+      "duplicate_seq_numbers": 31,
+      "prev_hash_chain_breaks": 44,
+      "verify_ok": false
+    },
+    {
+      "writers": 100,
+      "expected_events": 1001,
+      "lines": 1001,
+      "corrupt_lines": 0,
+      "json_events": 1001,
+      "duplicate_seq_numbers": 457,
+      "prev_hash_chain_breaks": 384,
+      "verify_ok": false
+    }
+  ],
+  "conclusion": "The JSONL ledger is SINGLE-WRITER ONLY. There is no file lock, lock file, compare-and-swap, or transaction. Separate OS processes race on (a) reading the current seq/head — several read the same N, (b) the issuance uniqueness check, and (c) interleaved fs.appendFileSync writes. Observed: duplicate seq numbers, broken prev_hash links, sometimes corrupt/interleaved lines, lost updates, verify() failure. The live PRODUCTION deployment avoids this by being a read-only static mirror (zero writes); local & CLI use is single-process."
+}
