@@ -1,19 +1,23 @@
-# spec/ — Production Identifier Freeze Audit
+# spec/ — Production Identifier Freeze Audit + Governance Preparation
 
-Documents for freezing the **permanent** identifier layer of TII **before** the
-first production identifier is ever issued.
+Documents for freezing the **permanent** identifier layer of TII, and for
+preparing the resolver domain, governance identity, and IANA registration —
+**before** the first production identifier is ever issued.
 
 > Production issuance is **disabled**. Every issued identifier is
 > `identifier_status: "test"`. Nothing in this directory or in `src/candidate/`
-> changes that.
+> changes that. No domain was purchased, no DNS changed, no email created, no
+> IANA submission made, no governance identity finalized.
 
 | File | Purpose |
 |---|---|
 | [`freeze-audit.md`](freeze-audit.md) | Decision reports A–H, collision math, IANA analysis, syntax comparison, signing design, security/privacy, the §32 decision table, the §33 theoretical audit, the §34 acceptance-condition answers, and the test-identifier migration decision. |
 | [`identifier-syntax-1.0-candidate.md`](identifier-syntax-1.0-candidate.md) | Draft normative spec: terminology, ABNF, generation, encoding, case, canonicalization, validation, issuance, resolution, withdrawal, invalid issuance, non-reuse, stewardship, signing, key rotation, versioning, succession, security, privacy, test identifiers, examples, interoperability, IANA. **Not final.** |
-| [`iana-provisional-registration.md`](iana-provisional-registration.md) | RFC 7595 provisional URI-scheme registration template. **Draft — not for submission.** |
+| [`resolver-domain-decision.md`](resolver-domain-decision.md) | Permanent-domain evaluation: RDAP availability (2026-09-11), pricing/registrar/DNSSEC/transfer, brand-collision audit, URL structure, DNS plan, HTTPS behaviour, decision table, PRIMARY + FALLBACK recommendation. **No domain selected or purchased.** |
+| [`governance-candidate.md`](governance-candidate.md) | Steward / change-controller / IANA-contact / role-email model; official-vs-mirror resolver distinction; public About/Governance copy; theoretical regression audit; final governance decision table. **All candidate.** |
+| [`domain-failure-and-recovery.md`](domain-failure-and-recovery.md) | Succession audited against permanent-domain failure: expiry, registrar loss, DNS loss, operator dissolution, steward transfer, resolver move; emergency migration mechanism; the recovery kit. |
+| [`iana-provisional-registration.md`](iana-provisional-registration.md) | RFC 7595 provisional URI-scheme registration — near-submission-ready draft; technical fields ready, governance fields marked unresolved. **NOT SUBMITTED.** |
 | [`succession-policy.md`](succession-policy.md) | TII Succession Policy (candidate). |
-| [`resolver-domain-decision.md`](resolver-domain-decision.md) | Permanent-domain evaluation. **No domain selected or purchased.** |
 | [`test-vectors.json`](test-vectors.json) | Machine-readable identifier test vectors, incl. RFC 3986 `uri_references` (fragment handling). Regenerate: `node spec/gen-test-vectors.js`. |
 | [`gen-test-vectors.js`](gen-test-vectors.js) | Vector generator (uses `src/candidate/identifier.js`). |
 

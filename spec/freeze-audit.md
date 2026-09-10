@@ -19,9 +19,11 @@ This document is reports **A–H** plus the decision table (§32), the theoretic
 audit (§33) and the acceptance-condition answers (§34). The companion documents:
 
 - [`identifier-syntax-1.0-candidate.md`](identifier-syntax-1.0-candidate.md) — the draft normative spec
-- [`iana-provisional-registration.md`](iana-provisional-registration.md) — RFC 7595 registration draft
+- [`iana-provisional-registration.md`](iana-provisional-registration.md) — RFC 7595 registration draft (near-submission-ready; NOT submitted)
+- [`resolver-domain-decision.md`](resolver-domain-decision.md) — permanent-domain decision report (RDAP checks; no purchase)
+- [`governance-candidate.md`](governance-candidate.md) — steward / change-controller / contact model (all candidate)
+- [`domain-failure-and-recovery.md`](domain-failure-and-recovery.md) — succession audited against domain failure
 - [`succession-policy.md`](succession-policy.md) — TII Succession Policy (candidate)
-- [`resolver-domain-decision.md`](resolver-domain-decision.md) — permanent-domain decision report (no purchase)
 - [`test-vectors.json`](test-vectors.json) — machine-readable vectors (regenerate with `gen-test-vectors.js`)
 
 ---

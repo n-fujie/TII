@@ -22,23 +22,40 @@ a fixed attribute, or that state, transition, and ignition are universal
 primitives. These are revisable operational descriptions. See the
 [Specification](/spec) for the full account.
 
-## Maintainer
+## Stewardship and governance
 
-Developed and maintained by **P/A Institute**.
+The TII specification and reference registry are currently maintained by
+**P/A Institute**, acting as the **current steward**.
 
-P/A Institute is the current developer and maintainer, not a permanent owner of
-the identifier system. TII identifiers embed no organization, person, date,
-country, or institutional ownership, and the system is designed to remain
-operable if maintenance passes to another party. Any such change is itself
-recorded as an event.
+Stewardship is a transferable operational role. It is **not** a component of TII
+identifier identity, and it may be transferred under the TII Succession Policy. A
+change of steward, technical operator, hosting provider, registrar, or resolver
+domain does **not** change any issued `tii:` identifier. TII identifiers embed no
+organization, person, date, country, or institutional ownership.
 
-## Independence from hosting
+The change controller for the `tii:` URI scheme is the current steward — again, a
+stewardship role, not ownership of TII.
 
-The record of authority is a single append-only file (`data/ledger.jsonl`). The
-entire set of records can be exported as JSON, JSON Lines, or CSV and rebuilt as
-a static file tree with no server or database. The resolver base URL is a
-configuration value; changing the hosting provider or domain does not change any
-identifier.
+If the steward ceases operation, the complete record — the append-only ledger,
+the signed checkpoints, the key set, and the specifications — is published so
+that any successor or the community can restore resolution without the original
+operator, hosting provider, or domain.
+
+## Independence from hosting and domain
+
+The record of authority is a single append-only file (`data/ledger.jsonl`),
+exportable as JSON / JSON Lines / CSV and rebuildable as a static file tree with
+no server or database. The resolver base URL is a single configuration value
+(`TII_RESOLVER_BASE_URL`); no hostname is embedded in the code, the ledger, or
+any identifier. Changing the hosting provider, registrar, or resolver domain
+does not change any identifier. A permanent resolver domain has not yet been
+selected.
+
+## Security
+
+Integrity or vulnerability reports will be received at a role address
+`security@` on the permanent domain (pending domain approval). Until then, use
+the contact channel on the source repository.
 
 ## Source
 
@@ -47,6 +64,9 @@ See the **Source Repository** link in the footer.
 
 ## Status
 
-- Specification: experimental (`0.1.x`).
-- Public deployment: early; the public instance is a read-only static mirror.
-- All currently issued identifiers are **test identifiers**.
+- Specification: experimental (`0.1.x`); the production identifier profile is
+  under a freeze audit and is not enabled.
+- Public deployment: early; the public instance is a read-only static mirror on
+  a replaceable third-party host.
+- All currently issued identifiers are **test identifiers**. Production issuance
+  is disabled.
