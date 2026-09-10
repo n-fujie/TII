@@ -235,6 +235,7 @@ function humanizeEventType(type, lang) {
     const JA = {
       'tii.issued': 'TII発行',
       'interpretation.revised': '解釈の改訂',
+      'localization.added': 'ローカライズの追加',
       'address.described': 'アドレス記述',
       'domain.described': 'ドメイン記述',
       'external.ref.added': '外部参照の追加',

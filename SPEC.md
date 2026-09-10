@@ -158,6 +158,13 @@ absent — the interface never shows an empty module.
 | `series` / lineage | A **judgement** placed between records, not a recorded object. Same-series / different-series / unknown / dispute / split / merge / withdraw. Prior judgements are never deleted. |
 | `external_identifier` | DOI / ARK / ISBN / ORCID / URL / IPFS CID / … Associated, never treated as a competitor. A TII is valid with none. |
 | `interpretation` | A revision of what this TII is understood to be tracking. The identifier string never changes. |
+| `localization` | An appended translation or localized rendering of a source event's content for a target language. Presentation and annotation — not evidence. It carries `source_event`, `source_language`, `target_language`, `kind` (`literal` / `interpretive`), and `translated_content`. The translation's `recorded_at` is the time of translation, which is a different fact from the source event's authored time. A later `localization` event for the same source and language supersedes an earlier one; the earlier one is retained. The authored content is never modified. |
+
+The authored language of an event is part of the record: new events set
+`content.language`. Localization is additive — a record authored in Japanese,
+English, or any other language keeps its source form, and any number of
+target-language renderings can be appended later without a schema change. There
+are no `description_en` / `description_ja` core fields.
 
 ## 7. Separation of evidence, judgement, and display
 
@@ -168,6 +175,28 @@ absent — the interface never shows an empty module.
 The system does not derive a single correct ontological conclusion from
 evidence. A sequence such as *evidence recorded → recorder X judges "ignition" →
 recorder Y contests → the judgement is later withdrawn* is retained in full.
+
+### 7.1 No display-driven mutation
+
+**No public rendering, localization, projection, export formatting, or
+documentation change may mutate previously recorded canonical events.**
+
+This is normative. Concretely:
+
+- Changing the interface language, display terminology, labels, translations,
+  documentation wording, or the preferred public language must never rewrite an
+  existing canonical event.
+- The projection layer chooses which representation to display — for an English
+  page, an English localization if one exists, otherwise the authored content;
+  likewise for Japanese or any other language — but the projection is derived
+  output, not historical truth, and it never writes to the ledger.
+- `rebuild-static` is a pure derivation from the ledger plus
+  documentation/localization resources. Running it does not alter ledger
+  contents, event IDs, timestamps, hashes, the chain head, or identifier status.
+- Test identifiers obey the same append-only rules as production identifiers
+  while TII semantics are being exercised. A deliberate development reset is a
+  disposable-environment reset, stated as such — not a valid TII history
+  mutation.
 
 ## 8. Identifier syntax (provisional)
 

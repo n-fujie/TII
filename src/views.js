@@ -3,6 +3,7 @@
 const labels = require('./labels');
 const { tiiToFileSlug } = require('./id');
 const { t, normalizeLang, humanizeEventType, recordStatusLabel, formatDate } = require('./i18n');
+const { displayContent } = require('./projection');
 const { renderMarkdown } = require('./md');
 
 const SOURCE_REPO = process.env.TII_SOURCE_REPO || 'https://github.com/n-fujie/TII';
@@ -307,6 +308,22 @@ function contentDl(content) {
   );
 }
 
+/**
+ * Render one record's content in the viewer's language. If an appended
+ * localization event targets this record for `lang`, its translated fields are
+ * shown (with a note) instead of the authored fields. This is display selection
+ * only — see projection.displayContent — the ledger is never touched.
+ */
+function displayDl(p, lang, viewOrCurrent) {
+  if (!viewOrCurrent) return '';
+  const { content, localized, localization } = displayContent(p, viewOrCurrent, lang);
+  const dl =
+    contentDl(content) || `<p class="small mono">${esc(JSON.stringify(content))}</p>`;
+  if (!localized) return dl;
+  const label = lang === 'ja' ? '原記録から翻訳表示' : 'Shown translated from the authored record';
+  return `${dl}<p class="muted small">${esc(label)} · ${esc(formatDate(localization.recorded_at))}</p>`;
+}
+
 function recordHistory(lang, bucket) {
   const L = (k) => t(lang, k);
   const rows = bucket.records
@@ -317,13 +334,18 @@ function recordHistory(lang, bucket) {
 <td class="small mono">${esc(JSON.stringify(r.content))}</td></tr>`
     )
     .join('');
+  const caption =
+    lang === 'ja'
+      ? 'この項目に記録された各イベントの原記録（翻訳前の正本内容）。'
+      : 'Each recorded event for this item, as authored (canonical content, before any translation).';
   return `<details><summary>${esc(L('col_detail'))} (${bucket.records.length})</summary>
+<p class="muted small">${esc(caption)}</p>
 <div class="table-scroll"><table><thead><tr><th>${esc(L('col_time'))}</th><th>act</th><th>${esc(
     L('col_recorder')
   )}</th><th>content</th></tr></thead><tbody>${rows}</tbody></table></div></details>`;
 }
 
-function moduleSection(lang, id, title, buckets, opts = {}) {
+function moduleSection(p, lang, id, title, buckets, opts = {}) {
   const L = (k) => t(lang, k);
   const blocks = buckets
     .map((b) => {
@@ -340,9 +362,8 @@ function moduleSection(lang, id, title, buckets, opts = {}) {
             : '(display labels, not an ontological state set)'
         }</p>`;
       }
-      const cur = b.current;
-      const curHtml = cur
-        ? contentDl(cur.content) || `<p class="small mono">${esc(JSON.stringify(cur.content))}</p>`
+      const curHtml = b.current
+        ? displayDl(p, lang, b.current)
         : `<p class="muted small">${esc(L('res_withdrawn'))}</p>`;
       return `<div class="record"><div class="ref">ref: ${esc(b.ref)} ${flags.join(' ')}</div>
 ${note}${curHtml}${recordHistory(lang, b)}</div>`;
@@ -422,7 +443,14 @@ ${p && p.tii ? `<p class="idbox">${esc(p.tii)}</p>` : ''}`,
 <h2 id="overview">${esc(L('res_overview'))}</h2>
 <dl class="kv">
 <dt>${esc(L('res_current_interpretation'))}</dt>
-<dd>${interp ? esc(interp.content.description || JSON.stringify(interp.content)) : `<span class="muted">${esc(L('res_no_interpretation'))}</span>`}</dd>
+<dd>${
+    interp
+      ? esc(
+          displayContent(p, interp, lang).content.description ||
+            JSON.stringify(displayContent(p, interp, lang).content)
+        )
+      : `<span class="muted">${esc(L('res_no_interpretation'))}</span>`
+  }</dd>
 <dt>${esc(L('res_last_event'))}</dt>
 <dd>${esc(humanizeEventType(lastEvent.event_type, lang))} <span class="muted small">${esc(formatDate(lastEvent.recorded_at))}</span></dd>
 <dt>${esc(L('res_external_ids'))}</dt>
@@ -465,8 +493,7 @@ ${!anyCurrent && !interp ? `<p class="notice">${esc(L('res_no_current_state'))}<
             .map(
               (b) =>
                 `<div class="record"><div class="ref">${esc(m)} · ref: ${esc(b.ref)}</div>${
-                  contentDl(b.current ? b.current.content : b.records[b.records.length - 1].content) ||
-                  ''
+                  displayDl(p, lang, b.current || b.records[b.records.length - 1])
                 }${recordHistory(lang, b)}</div>`
             )
             .join('')
@@ -475,10 +502,10 @@ ${!anyCurrent && !interp ? `<p class="notice">${esc(L('res_no_current_state'))}<
     : '';
 
   const transitionsSection = p.modules.transition
-    ? moduleSection(lang, 'transitions', L('sec_transitions'), p.modules.transition)
+    ? moduleSection(p, lang, 'transitions', L('sec_transitions'), p.modules.transition)
     : '';
   const ignitionsSection = p.modules.ignition
-    ? moduleSection(lang, 'ignitions', L('sec_ignitions'), p.modules.ignition, { ignition: true })
+    ? moduleSection(p, lang, 'ignitions', L('sec_ignitions'), p.modules.ignition, { ignition: true })
     : '';
 
   const addressDomainSection =
@@ -490,7 +517,7 @@ ${!anyCurrent && !interp ? `<p class="notice">${esc(L('res_no_current_state'))}<
               .map(
                 (b) =>
                   `<div class="record"><div class="ref">ref: ${esc(b.ref)}</div>${
-                    contentDl(b.current ? b.current.content : b.records[b.records.length - 1].content) || ''
+                    displayDl(p, lang, b.current || b.records[b.records.length - 1])
                   }${recordHistory(lang, b)}</div>`
               )
               .join('')
@@ -501,7 +528,7 @@ ${!anyCurrent && !interp ? `<p class="notice">${esc(L('res_no_current_state'))}<
               .map(
                 (b) =>
                   `<div class="record"><div class="ref">ref: ${esc(b.ref)}</div>${
-                    contentDl(b.current ? b.current.content : b.records[b.records.length - 1].content) || ''
+                    displayDl(p, lang, b.current || b.records[b.records.length - 1])
                   }${recordHistory(lang, b)}</div>`
               )
               .join('')
@@ -516,7 +543,7 @@ ${!anyCurrent && !interp ? `<p class="notice">${esc(L('res_no_current_state'))}<
               .map(
                 (b) =>
                   `<div class="record"><div class="ref">relation · ref: ${esc(b.ref)}</div>${
-                    contentDl(b.current ? b.current.content : b.records[b.records.length - 1].content) || ''
+                    displayDl(p, lang, b.current || b.records[b.records.length - 1])
                   }${recordHistory(lang, b)}</div>`
               )
               .join('')
@@ -526,7 +553,7 @@ ${!anyCurrent && !interp ? `<p class="notice">${esc(L('res_no_current_state'))}<
               .map(
                 (b) =>
                   `<div class="record"><div class="ref">series · ref: ${esc(b.ref)}</div>${
-                    contentDl(b.current ? b.current.content : b.records[b.records.length - 1].content) || ''
+                    displayDl(p, lang, b.current || b.records[b.records.length - 1])
                   }${recordHistory(lang, b)}</div>`
               )
               .join('')

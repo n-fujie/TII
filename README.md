@@ -49,10 +49,30 @@ blocks, and no fabricated "current state".
 | Separation | evidence (`basis`) / judgement (`recorder` + `content`) / display (`projection.js`) |
 | Portability | zero dependencies (Node stdlib); JSON / JSONL / CSV export; static-site rebuild |
 
+### Localization — no display-driven mutation
+
+Changing the interface language never rewrites a canonical event. A translation
+is an **appended** `localization.added` event:
+
+```jsonc
+{ "event_type": "localization.added",
+  "content": { "module": "localization", "source_event": "evt_…",
+    "source_language": "ja", "target_language": "en", "kind": "literal",
+    "translated_content": { "description": "…" } } }
+```
+
+`projection.displayContent(projection, event, lang)` picks the representation to
+show — a localization for `lang` if one exists, otherwise the authored content —
+and returns a **new object**; it never writes to the ledger. A later
+`localization` event for the same source + language supersedes the earlier one,
+which is retained. There are no `description_en` / `description_ja` core fields;
+any language can be added later with no schema change. See SPEC.md §6–§7.1 and
+`test/ledger-integrity.test.js`.
+
 ## Use
 
 ```bash
-node --test          # 55 tests: core + 25 destruction scenarios + 15 interface tests
+node --test          # 66 tests: core + 25 destruction + 15 interface + 11 ledger-integrity
 npm start            # http://localhost:3009
 ```
 

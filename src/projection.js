@@ -11,6 +11,12 @@
  *    current reading.
  *  - The system does not derive a single "correct ontological conclusion" from
  *    evidence. It reports what recorders asserted and what was disputed.
+ *
+ * NO DISPLAY-DRIVEN MUTATION. Projection is derived output, never historical
+ * truth. Nothing in this file — including language selection via `displayContent`
+ * — writes to, reorders, or rewrites the ledger. Localizations are appended
+ * events; projection only *chooses* which representation to show. Rendering an
+ * English or a Japanese page therefore changes zero canonical bytes.
  */
 
 function eventView(e) {
@@ -60,6 +66,8 @@ function project(events) {
   const interpretation = [];
   const lifecycle = [];
   const externalIdentifierEvents = [];
+  // source_event_id -> target_language -> latest localization view (ordered loop => last wins)
+  const localizations = {};
   let identifierStatus = issued && issued.content ? issued.content.identifier_status || 'test' : 'test';
 
   for (const e of ordered) {
@@ -71,6 +79,18 @@ function project(events) {
     if (TII_LIFECYCLE_TYPES.has(e.event_type)) lifecycle.push(view);
     if (e.supersedes) corrections.push(view);
     if (e.event_type === 'dispute.raised') disputes.push(view);
+
+    // Localization is presentation/annotation, not a descriptive module and not
+    // evidence. It is collected here for display selection only.
+    if (e.event_type === 'localization.added' || c.module === 'localization') {
+      const src = c.source_event || c.ref;
+      const lang = c.target_language;
+      if (src && lang) {
+        if (!localizations[src]) localizations[src] = {};
+        localizations[src][lang] = view; // a later localization event supersedes an earlier one
+      }
+      continue;
+    }
 
     const mod = c.module;
     if (mod) {
@@ -148,6 +168,7 @@ function project(events) {
     disputes,
     corrections,
     superseded_event_ids: [...supersededBy.keys()],
+    localizations,
     references,
     last_recorded_at: last ? last.recorded_at : null,
     event_count: ordered.length,
@@ -162,4 +183,32 @@ function project(events) {
   };
 }
 
-module.exports = { project, eventView };
+/**
+ * Choose the representation to DISPLAY for one event's content in `lang`.
+ *
+ * Derived output only — this returns a new object and never touches the ledger.
+ * If a localization for `lang` targeting this event exists, its
+ * `translated_content` keys override the authored keys; every other authored key
+ * (and any untranslated key) falls through unchanged. With no localization, or
+ * no language, the authored content is returned as-is. This works identically
+ * for a raw event and for an `eventView`, and for any language — English,
+ * Japanese, or one added later — with no schema change.
+ *
+ * @param {object} projection  output of project()
+ * @param {object} eventOrView an event or eventView (must carry `event_id`)
+ * @param {string} [lang]      target language, e.g. "en" | "ja"
+ * @returns {{content: object, localized: boolean, localization: object|null}}
+ */
+function displayContent(projection, eventOrView, lang) {
+  const authored = (eventOrView && eventOrView.content) || {};
+  const locs =
+    projection && projection.localizations && eventOrView
+      ? projection.localizations[eventOrView.event_id]
+      : null;
+  const loc = locs && lang ? locs[lang] : null;
+  if (!loc) return { content: authored, localized: false, localization: null };
+  const translated = (loc.content && loc.content.translated_content) || {};
+  return { content: { ...authored, ...translated }, localized: true, localization: loc };
+}
+
+module.exports = { project, eventView, displayContent };
