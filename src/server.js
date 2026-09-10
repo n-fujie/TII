@@ -8,27 +8,31 @@ const { URL } = require('node:url');
 const { Ledger } = require('./ledger');
 const { project } = require('./projection');
 const { sha256File } = require('./hash');
+const { tiiToFileSlug } = require('./id');
+const { normalizeLang } = require('./i18n');
 const views = require('./views');
 const exporters = require('./export');
 
 const DATA_FILE = process.env.TII_LEDGER || path.join(__dirname, '..', 'data', 'ledger.jsonl');
 const PORT = Number(process.env.PORT || process.env.TII_PORT || 3009);
 const ADMIN_TOKEN = process.env.TII_ADMIN_TOKEN || '';
+const RESOLVER_BASE = process.env.TII_RESOLVER_BASE_URL || '';
 
 const ledger = new Ledger(DATA_FILE).load();
 
 /* --------------------------------------------------------------- helpers --- */
 
 function send(res, status, body, headers = {}) {
-  res.writeHead(status, { 'X-TII-Status': 'provisional', ...headers });
+  res.writeHead(status, { 'X-TII-Status': 'experimental', ...headers });
   res.end(body);
 }
-function sendJSON(res, status, obj) {
-  send(res, status, JSON.stringify(obj, null, 2), { 'Content-Type': 'application/json; charset=utf-8' });
-}
-function sendHTML(res, status, html) {
-  send(res, status, html, { 'Content-Type': 'text/html; charset=utf-8' });
-}
+const sendJSON = (res, s, o) =>
+  send(res, s, JSON.stringify(o, null, 2), { 'Content-Type': 'application/json; charset=utf-8' });
+const sendHTML = (res, s, h) => send(res, s, h, { 'Content-Type': 'text/html; charset=utf-8' });
+const redirect = (res, loc) => {
+  res.writeHead(302, { Location: loc });
+  res.end();
+};
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -47,15 +51,15 @@ function readBody(req) {
 function parseBody(raw, contentType = '') {
   if (!raw) return {};
   if (contentType.includes('application/json')) return JSON.parse(raw);
-  const params = new URLSearchParams(raw);
   const out = {};
-  for (const [k, v] of params) out[k] = v;
+  for (const [k, v] of new URLSearchParams(raw)) out[k] = v;
   return out;
 }
 
 function authorized(req, bodyToken) {
   if (!ADMIN_TOKEN) return true;
-  const header = req.headers['x-tii-token'] || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  const header =
+    req.headers['x-tii-token'] || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   return header === ADMIN_TOKEN || bodyToken === ADMIN_TOKEN;
 }
 
@@ -69,8 +73,21 @@ function jsonMaybe(str, fallback) {
   }
 }
 
-function recentEvents(n) {
-  return ledger.events.slice(-n).reverse();
+/** Resolve an exact TII, or a filesystem slug (tii_xxx), or a bare body. */
+function resolveIdentifier(input) {
+  if (!input) return null;
+  let v = decodeURIComponent(input).replace(/\.(html|json)$/, '').trim().toLowerCase();
+  if (ledger.tiiExists(v)) return v;
+  if (!v.startsWith('tii:')) {
+    const withNs = 'tii:' + v.replace(/^tii[:_]?/, '');
+    if (ledger.tiiExists(withNs)) return withNs;
+  }
+  for (const t of ledger.listTIIs()) if (tiiToFileSlug(t) === v.replace(/:/g, '_')) return t;
+  return null;
+}
+
+function summariesForRegistry() {
+  return ledger.listTIIs().map((tii) => exporters.publicSummary(project(ledger.forTII(tii))));
 }
 
 /* ---------------------------------------------------------------- routes --- */
@@ -82,54 +99,73 @@ const server = http.createServer(async (req, res) => {
   } catch {
     return send(res, 400, 'bad url');
   }
-  const parts = url.pathname.split('/').filter(Boolean);
+  let parts = url.pathname.split('/').filter(Boolean);
   const method = req.method.toUpperCase();
 
+  // Language prefix (public HTML only). API / admin / export are not localized.
+  let lang = 'en';
+  if (parts[0] === 'ja') {
+    lang = 'ja';
+    parts = parts.slice(1);
+  }
+
   try {
-    // --- home / static-ish pages ---
+    /* ---- public HTML ---- */
     if (method === 'GET' && parts.length === 0) {
-      const summaries = ledger.listTIIs().map((tii) => {
-        const p = project(ledger.forTII(tii));
-        return {
-          tii,
-          identifier_status: p.identifier_status,
-          lifecycle_state: p.lifecycle_state,
-          last_recorded_at: p.last_recorded_at,
-          event_count: p.event_count,
-          disputes: p.disputes.length,
-        };
-      });
-      return sendHTML(res, 200, views.renderIndexPage({
-        summaries,
-        recent: recentEvents(15),
-        verification: ledger.verify(),
-      }));
+      return sendHTML(res, 200, views.homePage({ lang }));
     }
 
-    if (method === 'GET' && parts[0] === 'spec') {
-      return sendHTML(res, 200, views.renderSpecPage());
+    if (method === 'GET' && parts[0] === 'registry' && parts.length === 1) {
+      return sendHTML(res, 200, views.registryPage({ lang, summaries: summariesForRegistry() }));
     }
+
+    if (method === 'GET' && (parts[0] === 'spec' || parts[0] === 'about') && parts.length === 1) {
+      const d = exporters.DOCS[parts[0]];
+      return sendHTML(
+        res,
+        200,
+        views.docPage({ lang, title: d.title[lang], path: d.path, markdown: exporters.readDoc(d[lang]) })
+      );
+    }
+
+    if (method === 'GET' && parts[0] === 'audit' && parts.length === 1) {
+      return sendHTML(
+        res,
+        200,
+        views.auditPage({
+          lang,
+          verification: ledger.verify(),
+          generatedAt: new Date().toISOString(),
+          exportBase: '/export/ledger',
+        })
+      );
+    }
+
+    if (method === 'GET' && parts[0] === 'resolve') {
+      const found = resolveIdentifier(url.searchParams.get('tii'));
+      if (found) return redirect(res, (lang === 'ja' ? '/ja' : '') + '/tii/' + tiiToFileSlug(found));
+      return sendHTML(res, 404, views.resolutionPage({ lang, p: { exists: false, tii: url.searchParams.get('tii') } }));
+    }
+
+    /* ---- non-localized: spec.md, health ---- */
     if (method === 'GET' && parts[0] === 'spec.md') {
-      return send(res, 200, fs.readFileSync(path.join(__dirname, '..', 'SPEC.md')), {
-        'Content-Type': 'text/markdown; charset=utf-8',
-      });
-    }
-    if (method === 'GET' && parts[0] === 'verify') {
-      const v = ledger.verify();
-      if ((req.headers.accept || '').includes('application/json')) return sendJSON(res, 200, v);
-      return sendHTML(res, 200, views.page('TII 監査', `<h1>ハッシュ連鎖検証</h1><pre>${views.esc(JSON.stringify(v, null, 2))}</pre>`));
+      return send(res, 200, exporters.readDoc('SPEC.md'), { 'Content-Type': 'text/markdown; charset=utf-8' });
     }
     if (method === 'GET' && parts[0] === 'healthz') {
       return sendJSON(res, 200, { ok: true, events: ledger.events.length });
     }
-    if (method === 'GET' && parts[0] === 'admin') {
-      return sendHTML(res, 200, views.renderAdminPage({
-        tiis: ledger.listTIIs(),
-        token_required: !!ADMIN_TOKEN,
-      }));
+    if (method === 'GET' && parts[0] === 'verify') {
+      const v = ledger.verify();
+      if ((req.headers.accept || '').includes('application/json')) return sendJSON(res, 200, v);
+      return sendHTML(res, 200, views.auditPage({ lang, verification: v, generatedAt: new Date().toISOString(), exportBase: '/export/ledger' }));
     }
 
-    // --- exports ---
+    /* ---- admin ---- */
+    if (method === 'GET' && parts[0] === 'admin' && parts.length === 1) {
+      return sendHTML(res, 200, views.adminPage({ tiis: ledger.listTIIs(), tokenRequired: !!ADMIN_TOKEN }));
+    }
+
+    /* ---- exports ---- */
     if (method === 'GET' && parts[0] === 'export') {
       const what = parts[1];
       if (what === 'ledger.jsonl')
@@ -140,24 +176,14 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, exporters.toCSV(ledger), { 'Content-Type': 'text/csv; charset=utf-8' });
       if (what === 'static') {
         const out = path.join(__dirname, '..', 'dist');
-        const result = exporters.buildStaticSite(ledger, out, { host: `http://${req.headers.host}` });
-        return sendJSON(res, 200, result);
+        return sendJSON(res, 200, exporters.buildStaticSite(ledger, out, { resolverBase: RESOLVER_BASE }));
       }
       return send(res, 404, 'unknown export');
     }
 
-    // --- resolve helper (form GET) ---
-    if (method === 'GET' && parts[0] === 'resolve') {
-      const tii = url.searchParams.get('tii');
-      if (!tii) return send(res, 400, 'missing tii');
-      res.writeHead(302, { Location: '/tii/' + encodeURIComponent(tii) });
-      return res.end();
-    }
-
-    // --- API: create TII ---
+    /* ---- API: create TII ---- */
     if (method === 'POST' && parts[0] === 'api' && parts[1] === 'tii' && parts.length === 2) {
-      const raw = await readBody(req);
-      const body = parseBody(raw, req.headers['content-type']);
+      const body = parseBody(await readBody(req), req.headers['content-type']);
       if (!authorized(req, body.token)) return sendJSON(res, 401, { error: 'unauthorized' });
       const { tii, event } = ledger.issueTII({
         recorder: body.recorder || 'unspecified',
@@ -169,14 +195,13 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 201, { tii, event, resolve_url: `/tii/${encodeURIComponent(tii)}` });
     }
 
-    // --- API: TII sub-resources ---
+    /* ---- API: TII sub-resources ---- */
     if (parts[0] === 'api' && parts[1] === 'tii' && parts[2]) {
       const tii = decodeURIComponent(parts[2]);
       const sub = parts[3];
 
       if (method === 'POST' && sub === 'events') {
-        const raw = await readBody(req);
-        const body = parseBody(raw, req.headers['content-type']);
+        const body = parseBody(await readBody(req), req.headers['content-type']);
         if (!authorized(req, body.token)) return sendJSON(res, 401, { error: 'unauthorized' });
         const event = ledger.append({
           tii,
@@ -196,48 +221,70 @@ const server = http.createServer(async (req, res) => {
         const events = ledger.forTII(tii);
         if (events.length === 0) return sendJSON(res, 404, { error: 'unknown TII', tii });
         const p = project(events);
-        if (!sub) return sendJSON(res, 200, { tii, identifier_status: p.identifier_status, lifecycle_state: p.lifecycle_state, last_recorded_at: p.last_recorded_at, event_count: p.event_count, disputes: p.disputes.length, disclaimer: p.disclaimer });
+        if (!sub)
+          return sendJSON(res, 200, {
+            tii,
+            identifier_status: p.identifier_status,
+            lifecycle_state: p.lifecycle_state,
+            last_recorded_at: p.last_recorded_at,
+            event_count: p.event_count,
+            disputes: p.disputes.length,
+            disclaimer: p.disclaimer,
+          });
         if (sub === 'events') return sendJSON(res, 200, { tii, events });
         if (sub === 'history') return sendJSON(res, 200, p);
-        if (sub === 'relations') return sendJSON(res, 200, { tii, relations: p.modules.relation || [], series: p.modules.series || [] });
+        if (sub === 'relations')
+          return sendJSON(res, 200, { tii, relations: p.modules.relation || [], series: p.modules.series || [] });
         if (sub === 'references') return sendJSON(res, 200, { tii, references: p.references });
         if (sub === 'data') return sendJSON(res, 200, p);
         return sendJSON(res, 404, { error: 'unknown sub-resource' });
       }
     }
 
-    // --- HTML resolution pages ---
+    /* ---- resolution pages ---- */
     if (parts[0] === 'tii' && parts[1]) {
-      const tii = decodeURIComponent(parts[1].replace(/\.html$|\.json$/, ''));
-      const events = ledger.forTII(tii);
-      const p = project(events);
-      if (parts[1].endsWith('.json') || parts[2] === 'data') return sendJSON(res, events.length ? 200 : 404, p);
-      if (method === 'GET') return sendHTML(res, events.length ? 200 : 404, views.renderResolutionPage(p));
+      const wantsJSON = parts[1].endsWith('.json') || parts[2] === 'data';
+      const found = resolveIdentifier(parts[1]);
+      const p = found ? project(ledger.forTII(found)) : { exists: false, tii: decodeURIComponent(parts[1]) };
+      if (wantsJSON) return sendJSON(res, found ? 200 : 404, p);
+      if (method === 'GET')
+        return sendHTML(res, found ? 200 : 404, views.resolutionPage({ lang, p, resolverBase: RESOLVER_BASE }));
     }
 
-    // --- admin form handlers ---
+    /* ---- admin form handlers ---- */
     if (method === 'POST' && parts[0] === 'admin') {
-      const raw = await readBody(req);
-      const body = parseBody(raw, req.headers['content-type']);
-      if (!authorized(req, body.token)) return sendHTML(res, 401, views.page('401', '<h1>unauthorized</h1><p>トークンが必要。</p>'));
+      const body = parseBody(await readBody(req), req.headers['content-type']);
+      if (!authorized(req, body.token))
+        return sendHTML(res, 401, views.messagePage({ title: 'Unauthorized', html: '<p>A write token is required.</p>' }));
 
       if (parts[1] === 'issue') {
         const { tii } = ledger.issueTII({
           recorder: body.recorder || 'admin',
           content: body.note ? { tracking_started_note: body.note } : {},
         });
-        res.writeHead(302, { Location: '/tii/' + encodeURIComponent(tii) });
-        return res.end();
+        return redirect(res, '/tii/' + tiiToFileSlug(tii));
       }
 
       if (parts[1] === 'hash-file') {
         try {
           const digest = sha256File(body.path);
-          return sendHTML(res, 200, views.page('SHA-256', `<h1>SHA-256</h1><p class="mono">${views.esc(body.path)}</p>
-<pre>${digest}</pre><p><a href="/admin">← 管理へ戻る</a>。content.hash.recorded の content に貼り付け:</p>
-<pre>${views.esc(JSON.stringify({ module: 'content', algo: 'sha256', value: digest, filename: path.basename(body.path) }, null, 2))}</pre>`));
+          const snippet = JSON.stringify(
+            { module: 'content', algo: 'sha256', value: digest, filename: path.basename(body.path) },
+            null,
+            2
+          );
+          return sendHTML(
+            res,
+            200,
+            views.messagePage({
+              title: 'SHA-256',
+              html: `<p class="mono">${views.esc(body.path)}</p><pre>${digest}</pre>
+<p>Paste into a <code>content.hash.recorded</code> event:</p><pre>${views.esc(snippet)}</pre>
+<p><a href="/admin">← Admin</a></p>`,
+            })
+          );
         } catch (e) {
-          return sendHTML(res, 400, views.page('error', `<h1>ハッシュ計算失敗</h1><pre>${views.esc(e.message)}</pre>`));
+          return sendHTML(res, 400, views.messagePage({ title: 'Hash failed', html: `<pre>${views.esc(e.message)}</pre>` }));
         }
       }
 
@@ -253,16 +300,19 @@ const server = http.createServer(async (req, res) => {
             content_verification: jsonMaybe(body.content_verification, undefined),
             supersedes: body.supersedes || undefined,
           });
-          res.writeHead(302, { Location: '/tii/' + encodeURIComponent(event.tii) });
-          return res.end();
+          return redirect(res, '/tii/' + tiiToFileSlug(event.tii));
         } catch (e) {
-          return sendHTML(res, 400, views.page('error', `<h1>イベント追加失敗</h1><pre>${views.esc(e.message)}</pre><p><a href="/admin">← 戻る</a></p>`));
+          return sendHTML(
+            res,
+            400,
+            views.messagePage({ title: 'Append failed', html: `<pre>${views.esc(e.message)}</pre><p><a href="/admin">← Admin</a></p>` })
+          );
         }
       }
       return send(res, 404, 'unknown admin action');
     }
 
-    return send(res, 404, 'not found');
+    return sendHTML(res, 404, views.notFoundPage({ lang }));
   } catch (err) {
     return sendJSON(res, 400, { error: err.message });
   }
@@ -270,9 +320,10 @@ const server = http.createServer(async (req, res) => {
 
 if (require.main === module) {
   server.listen(PORT, () => {
-    console.log(`TII (provisional) listening on http://localhost:${PORT}`);
+    console.log(`TII listening on http://localhost:${PORT}`);
     console.log(`  ledger: ${DATA_FILE}  (${ledger.events.length} events)`);
     console.log(`  write token: ${ADMIN_TOKEN ? 'required' : 'not set (single-admin local mode)'}`);
+    console.log(`  resolver base: ${RESOLVER_BASE || '(relative)'}`);
   });
 }
 

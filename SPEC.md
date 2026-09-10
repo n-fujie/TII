@@ -1,183 +1,226 @@
-# TII 公開仕様書（PROVISIONAL / 試験版）
+# TII — Transition-Ignition Identifier
 
-**Transition-Ignition Identifier — 遷移発火識別子**
-仕様版：`0.1.0-draft`　状態：試験用（本番発行前）
+**Public Specification**
+遷移発火識別子
 
-本仕様は実装と同時に作成された（要件22）。確定するまで、本実装が発行する
-すべての識別子は **試験用識別子（`identifier_status: "test"`）** である（要件28）。
+Specification version: `0.1.0` · Status: **Experimental Specification**
 
----
-
-## 1. TIIが保証しないこと（要件22）
-
-TIIは、次のいずれも **単独では保証しない**。
-
-- 対象の本質的同一性
-- 所有権
-- 真正性
-- 学術的正当性
-- 識別子文字列自体の性質としての永続性
-
-TIIは、次のいずれも **普遍的存在論単位としない**。
-
-- 状態（state）
-- 遷移（transition）
-- 発火（ignition）
-- アドレス（address）／配置
-- ドメイン（domain）
-- 境界（boundary）
-- 系列（series）／系譜
-
-これらは **必要な場面で採用される、改訂可能な作動記述** である。
-TII自身が使用する語彙もまた、最終的・不可逆的なものとして扱わない。
+This document is normative for the reference implementation in this repository.
+While the specification is experimental, every identifier issued by this
+implementation is a **test identifier** (see §9).
 
 ---
 
-## 2. TIIが最低限意味すること
+## 1. Purpose
 
-TIIの付与は **「この参照点から追跡を開始した」** ことだけを意味する。
+TII is a reference and audit infrastructure for recording **how distinctions,
+relations, functions, classifications, and other descriptions become operative
+under specified conditions**, and how those recorded conditions, relations,
+addresses, interpretations, and transitions **change over time**.
 
-- 1つのTIIが後に複数系列へ分離されてよい。
-- 複数のTIIが後に1系列として統合判定されてよい。
-- TII文字列は変更しないが、「何を追跡していると解釈されているか」は改訂可能。
-- 根TII ≠ 一系列（要件4）。
+Issuing a TII means only one thing: **tracking has started from a stated
+reference point.** It does not assert that a fixed object exists, that the
+reference point is permanent, or that any particular description of it is final.
 
----
+TII operates **below** research and theoretical architectures (such as the Ziran
+System). It does not replace them and does not stand above them.
 
-## 3. 識別子構文（PROVISIONAL）
+## 2. What TII does not assume
 
-| 項目 | 暫定値 | 確定状況 |
-|------|--------|----------|
-| 正式名称 | Transition-Ignition Identifier | 未確定 |
-| 略称 | TII | 未確定 |
-| 名前空間 | `tii:` | 未確定 |
-| 識別子構文 | `tii:` + 本体 | 未確定 |
-| 本体文字数 | 12 | 未確定 |
-| 許可文字 | `0-9 a-h j k m n p-t v-z`（Crockford風、`i l o u` 除外） | 未確定 |
-| 大文字小文字規則 | 小文字正規化、比較は小文字 | 未確定 |
-| 乱数生成方式 | CSPRNG + 棄却サンプリング | 未確定 |
-| 衝突処理 | 台帳全体照合、最大1000回再試行、失敗時エラー | 未確定 |
-| 解決URL | `https://<host>/tii/<id>` | 未確定 |
-| 失効処理 | `tii.retracted` / `tii.suspended` イベント（文字列は保持） | 未確定 |
-| 移管処理 | `authority.transferred` イベント | 未確定 |
-| 仕様版管理 | 本文書冒頭の `仕様版` | 未確定 |
-| 長期継承方針 | `ledger.jsonl` の保全と再構築（§7） | 未確定 |
+TII does **not** assume that:
 
-文字列に埋め込んではならないもの：組織名・個人名・所有主体・発行年・場所・国・
-対象カテゴリー・論文種別・版番号・アドレス・ドメイン・理論名・発火状態・遷移状態。
+- identity is intrinsic;
+- state is universally applicable;
+- transition is a universal ontological primitive;
+- ignition is a universal ontological primitive;
+- address is fixed;
+- domain is fixed;
+- boundary is fixed;
+- ownership is intrinsic;
+- lineage is inherently given.
 
----
+Each of these is a **revisable operational description**. It is adopted only when
+a recorder finds it useful, and it can later be qualified, contested, replaced,
+redefined, or withdrawn — without erasing the earlier record.
 
-## 4. データモデル
+> **Transition and ignition are revisable operational descriptions, not universal ontological primitives.** The name "Transition-Ignition Identifier" reflects the descriptions TII most often carries; it is not a claim that every TII contains a transition or an ignition.
 
-### 4.1 コアイベント（必須10項目のみ）
+## 3. What TII does not guarantee
+
+A TII, by itself, does **not** guarantee:
+
+- essential identity;
+- ownership;
+- authenticity;
+- scholarly validity;
+- truth;
+- permanence;
+- persistence of hosting;
+- correctness of classification.
+
+What TII does: it **records and exposes traceable assertions, relations,
+changes, evidence, contestation, and revision** — with an append-only history
+that is never rewritten.
+
+## 4. Three kinds of maturity
+
+These are distinct and must not be conflated:
+
+| Concept | Meaning | Current value |
+|---|---|---|
+| Specification maturity | How settled the TII specification itself is | Experimental (`0.1.x`) |
+| Deployment maturity | How settled a particular running instance is | Early; public instance is a read-only static mirror |
+| Identifier status | Whether a specific identifier is production or test | All currently issued identifiers are **test identifiers** |
+
+## 5. TII Core
+
+The core is deliberately minimal. An event carries only:
+
+1. an opaque TII;
+2. a record event;
+3. references between events;
+4. the time the event occurred or was registered;
+5. the recording party or mechanism;
+6. the recorded content;
+7. a reference to evidence or grounds;
+8. a structure that *can* carry a content-verification value;
+9. a structure that *can* carry external references;
+10. an audit link to the immediately preceding record.
+
+State, transition, ignition, address, domain, ownership, lineage, series, scale,
+and boundary are **not** core fields.
+
+### 5.1 Event shape
 
 ```jsonc
 {
-  "event_id": "evt_...",              // 不透明
-  "tii": "tii:...",                   // 対象TII
-  "seq": 0,                           // 台帳内連番
-  "recorded_at": "2026-01-01T00:00:00.000Z",   // 主張時刻
-  "ledger_written_at": "2026-01-01T00:00:00.000Z", // 台帳書込時刻
-  "recorder": { "id": "...", "kind": "person|mechanism|..." },
-  "event_type": "自由文字列",
-  "content": { },                    // 記録内容（任意構造）
-  "basis": [ ],                      // 証拠・根拠への参照
-  "external_refs": [ ],              // 外部参照（任意）
-  "content_verification": { "algo": "sha256", "value": "..." }, // 任意
-  "supersedes": "evt_...",           // 訂正対象（任意、旧記録は保持）
-  "prev_event_for_target": "evt_...",// 同一TIIの直前イベント
-  "prev_hash": "<hex>",              // 直前台帳イベントのhash
-  "hash": "<hex>"                    // 本イベント内容のhash
+  "event_id": "evt_…",              // opaque
+  "tii": "tii:…",                   // target identifier
+  "seq": 0,                         // position in the ledger
+  "recorded_at": "2026-01-01T00:00:00.000Z",       // asserted time
+  "ledger_written_at": "2026-01-01T00:00:00.000Z", // time written to the ledger
+  "recorder": { "id": "…", "kind": "person|mechanism|…" },
+  "event_type": "free string",
+  "content": { },                  // recorded content (any structure)
+  "basis": [ ],                    // evidence / grounds references
+  "external_refs": [ ],            // optional
+  "content_verification": { "algo": "sha256", "value": "…" }, // optional
+  "supersedes": "evt_…",           // optional; the superseded event is kept
+  "prev_event_for_target": "evt_…",
+  "prev_hash": "<hex>",
+  "hash": "<hex>"
 }
 ```
 
-`content` に置かれた `module` / `ref` / `act` 以外を、エンジンは特権化しない。
+`event_type` is an open vocabulary. Unknown event types, unknown module names,
+and unknown act values are all stored verbatim and displayed as-is.
 
-### 4.2 ハッシュ連鎖
+### 5.2 Append-only history
+
+Existing records are never overwritten. A correction is a **new** event that
+references the event it supersedes; the current reading is then recomputed. The
+superseded event remains in the ledger and in the history.
+
+### 5.3 Hash chain
 
 ```
 hash = SHA-256( prev_hash + canonicalJSON(event without "hash") )
-canonicalJSON = キーを再帰的に辞書順ソートした決定的 JSON
-genesis prev_hash = "0" * 64
+canonicalJSON = recursively key-sorted, deterministic JSON
+genesis prev_hash = "0" × 64
 ```
 
-`GET /verify` / `node bin/tii.js verify` が全連鎖を再計算し、
-内容改変・行削除・並替を検出する。ブロックチェーンは用いない（要件21）。
+Verification recomputes the entire chain and detects rewritten content, deleted
+lines, and reordering. No blockchain, token, or cryptoasset is involved. Digital
+signatures and multi-signature schemes may be added later as event content.
 
----
+## 6. Optional descriptive modules
 
-## 5. 記述モジュール（すべて任意）
-
-`content` に次を置くと、投影・解決ページ・API がモジュールとして扱う。
-モジュール名・`act` 値はいずれも **開いた集合**。
+A module is a **convention over `content`**, not a privileged structure:
 
 ```jsonc
-{ "module": "...", "ref": "...", "act": "introduce|apply|hold|stop|replace|redefine|dispute|withdraw|...",
-  "description": "...", "...": "モジュール固有フィールド" }
+{ "module": "…", "ref": "…",
+  "act": "introduce | apply | hold | stop | replace | redefine | dispute | withdraw | …",
+  "description": "…", "…": "module-specific fields" }
 ```
 
-| module | 主な固有フィールド | 備考 |
-|--------|--------------------|------|
-| `state` | `label`, `from`, `to`, `predecessor_refs` | 離散状態を仮定しない |
-| `transition` | `relation_kind`(前後/派生/分岐/統合/置換/停止/再開/撤回/再接続/循環/不明/異議あり/…), `from_ref`, `to_ref` | A→Bを存在論的事実に固定しない |
-| `ignition` | `what`, `under_conditions`, `at_time`, `scale`, `boundary`, `address_or_domain` | 物理的燃焼を意味しない／真偽値に還元しない |
-| `address` | `kind`(公開場所/保存場所/ネットワーク位置/取得経路/物理所在/論理位置), `value` | 複数可／正本を自動特権化しない |
-| `domain` | `label`, `scope` | アドレスと同一視しない |
-| `boundary` | `label`, `extent` | 変更で同一性・関係判定が変わるのは正常 |
-| `scale` | `label`, `value` | |
-| `timespan` | `start`, `end`, `label` | 異なる区間から別記述が成立してよい |
-| `relation` | `relation_type`(管理/保存/アクセス/変更/複製/配布/維持/停止/削除/移管/署名/著作権保持/資金提供/公開/検証/…), `subject`, `object`, `scope`, `conditions` | 単一 `owner` 属性を設けない |
-| `series` | `judgement`(same/different/unknown/dispute/split/merge/withdraw), `members`(tii配列), `reason` | 記録対象でなく判定 |
-| `external_identifier` | `scheme`(doi/ark/isbn/orcid/url/ipfs-cid/…), `value` | `external_refs` でも可 |
-| `interpretation` | `description` | 「何を追跡しているか」の改訂 |
+Module names and `act` values are open sets. A module with no records is simply
+absent — the interface never shows an empty module.
 
-記録の無いモジュールは表示しない（要件24）。
+| module | notes |
+|---|---|
+| `state` | Discrete states are not assumed. Two states may later be re-described as one continuous process. |
+| `transition` | `A → B` is not fixed as an ontological fact. "Classifying this as a transition was inappropriate" is itself a recordable correction. |
+| `ignition` | A described distinction / function / rule / role becoming operative under stated conditions. Not physical combustion. Not reduced to a boolean. |
+| `address` | Current public / storage / repository / network / physical / logical location. Multiple simultaneous addresses are allowed; none is automatically privileged as authoritative. |
+| `domain` | The operative or analytical scope within which a record, relation, distinction, or classification is being interpreted. **Distinct from address.** |
+| `boundary` | Changing a boundary may change identity or relation judgements. That is normal; the change history is kept. |
+| `relation` | administers / stores / accesses / modifies / copies / distributes / maintains / stops / deletes / transfers / signs / holds-copyright / funds / publishes / verifies / … — an open set. There is no single required `owner` field. |
+| `series` / lineage | A **judgement** placed between records, not a recorded object. Same-series / different-series / unknown / dispute / split / merge / withdraw. Prior judgements are never deleted. |
+| `external_identifier` | DOI / ARK / ISBN / ORCID / URL / IPFS CID / … Associated, never treated as a competitor. A TII is valid with none. |
+| `interpretation` | A revision of what this TII is understood to be tracking. The identifier string never changes. |
 
----
+## 7. Separation of evidence, judgement, and display
 
-## 6. 証拠 / 判定 / 表示の分離（要件18）
+1. **Evidence** — `basis`, `content_verification`, `external_refs`.
+2. **Judgement** — what a `recorder` asserted in `content`.
+3. **Display** — the "current reading" recomputed from the event stream.
 
-1. **証拠**：`basis`, `content_verification`, `external_refs`
-2. **判定**：`recorder` による `content`（`act`, `relation_kind`, `judgement` 等）
-3. **表示**：`projection.js` が再計算する「現在有効と解釈される記録」
+The system does not derive a single correct ontological conclusion from
+evidence. A sequence such as *evidence recorded → recorder X judges "ignition" →
+recorder Y contests → the judgement is later withdrawn* is retained in full.
 
-システムは証拠から唯一の存在論的結論を自動生成しない。
-`証拠 → 判定 → 異議 → 撤回` の全履歴を保持する。
+## 8. Identifier syntax (provisional)
 
----
+Every value in this table is **not yet finalized**.
 
-## 7. 保存と移植性（要件20, 27）
+| Item | Provisional value |
+|---|---|
+| Namespace | `tii:` |
+| Body | 12 characters |
+| Allowed characters | `0-9 a-h j k m n p-t v-z` (Crockford-style; no `i l o u`) |
+| Case | lowercase; compared in lowercase |
+| Generation | CSPRNG with rejection sampling (no modulo bias) |
+| Collision handling | checked against the whole ledger; retried; error on exhaustion |
+| Resolution URL | `<resolver base>/tii/<id>` — the resolver base is a configuration value, not part of the identifier |
+| Revocation / transfer | recorded as events; the identifier string is retained |
 
-- 正本：`data/ledger.jsonl`（追記型、1行1イベント、UTF-8）。
-- 書き出し：`JSON` / `JSON Lines` / `CSV`。
-- 静的再構築：`node bin/tii.js rebuild-static` → `dist/`（HTML + JSON + `ledger.jsonl`）。
-- 依存関係ゼロ。特定クラウド企業の非公開機能を再実装の必須にしない。
-- ホスティング／DB製品が変わっても `ledger.jsonl` から同一状態・同一TII文字列で再構築可能。
+The identifier is opaque. It must not embed an organization, person, owner,
+year, place, country, category, document type, version, address, domain, theory,
+ignition state, or transition state.
 
----
+## 9. Test identifiers
 
-## 8. 削除・誤発行の扱い（要件16, 23）
+Until §8 is finalized and the pre-production audit (below) passes, all issued
+identifiers carry `identifier_status: "test"`. Promotion to production status
+does not change the identifier string.
 
-一度発行したTIIそのものは通常削除しない。削除要求・誤発行は
-`tii.retracted` / `tii.suspended` / `tii.made-nonpublic` 等の **記録イベント** として処理する。
-過去記録は失われない。
+## 10. Portability
 
----
+- The record of authority is `data/ledger.jsonl` (append-only, one event per
+  line, UTF-8).
+- Exports: JSON, JSON Lines, CSV.
+- The complete set of records can be reconstructed as a static file tree with no
+  server, database, or cloud service.
+- If the hosting provider, database product, or domain changes, previously
+  issued identifiers are unaffected and the records rebuild identically.
+- Re-implementation must not require any provider's proprietary features.
 
-## 9. 本番発行前の必須監査（要件27）
+## 11. Pre-production audit
 
-本番公開前に §3 の全項目を確定し、次を確認する。
+Before the first production identifier is issued, §8 must be finalized and the
+following confirmed:
 
-- 既存PID（DOI/ARK/DID/内容ハッシュ/来歴記録）との差異を過大主張していない／藁人形化していない。
-- 状態・遷移・発火・配置・アドレス・ドメイン・境界を存在論化していない。
-- 所有を固定属性へ戻していない。
-- AI・人間・組織等の既成カテゴリーを先行させていない。
-- 上位理論よりTIIのデータモデルが硬くなっていない。
-- TII自身の概念が将来改訂されても既発行識別子を維持できる。
-- 特定クラウド企業から完全移行可能。
-- 履歴改変を検出可能。
-- 削除・訂正で過去記録が失われない。
-- 新規概念を必要以上に追加していない。
+- differences from existing PIDs (DOI, ARK, DID, content hashes, provenance
+  records) are not overstated, and those systems are not misrepresented;
+- state, transition, ignition, placement, address, domain, and boundary are not
+  ontologized;
+- ownership is not reintroduced as a fixed attribute;
+- categories such as AI / human / organization are not made primary;
+- the TII data model is not more rigid than the theories it serves;
+- a future revision of TII's own vocabulary can be made while previously issued
+  identifiers remain valid;
+- full migration away from any single cloud provider is possible;
+- history tampering is detectable;
+- corrections and deletions never lose the earlier record.
 
-後退を検出した場合は本番発行を停止する。
+If a regression is detected, production issuance stops.
