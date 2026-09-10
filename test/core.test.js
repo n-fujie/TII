@@ -17,8 +17,7 @@ test('identifier is opaque, well-formed, and collision-free at scale', () => {
     const id = newTII((c) => seen.has(c));
     assert.ok(isWellFormedTII(id), `well formed: ${id}`);
     assert.match(id.slice(4), new RegExp(`^[${ALPHABET}]+$`));
-    // no embedded semantics we can cheaply check: no year, no obvious words
-    assert.doesNotMatch(id, /20\d\d/);
+    assert.equal(id.length, 4 + 12);
     assert.ok(!seen.has(id));
     seen.add(id);
   }

@@ -57,13 +57,18 @@ nav.crumbs{font-size:13px;margin-bottom:10px}
 `;
 
 function page(title, body, opts = {}) {
-  const base = opts.static ? '' : '';
+  // Static export (Vercel etc.) is a READ-ONLY mirror: no admin, and "監査" points
+  // at the catalog JSON that carries the verification result. cleanUrls maps
+  // "/spec" -> spec.html and "/" -> index.html.
+  const nav = opts.static
+    ? `<a href="/spec">仕様</a> · <a href="/catalog.json">監査</a> · <a href="/ledger.jsonl">台帳</a>`
+    : `<a href="/spec">仕様</a> · <a href="/admin">管理</a> · <a href="/verify">監査</a>`;
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title><style>${STYLE}</style></head><body>
-<header><span class="brand"><a href="${base}/">TII</a></span>
-<span class="muted">Transition-Ignition Identifier — 試験版 / PROVISIONAL</span>
-<span style="margin-left:auto"><a href="${base}/spec">仕様</a> · <a href="${base}/admin">管理</a> · <a href="${base}/verify">監査</a></span>
+<header><span class="brand"><a href="/">TII</a></span>
+<span class="muted">Transition-Ignition Identifier — 試験版 / PROVISIONAL${opts.static ? '（読み取り専用ミラー）' : ''}</span>
+<span style="margin-left:auto">${nav}</span>
 </header><main>${body}</main></body></html>`;
 }
 
@@ -75,7 +80,7 @@ function renderIndexPage({ summaries = [], recent = [], verification, static: is
     .sort((a, b) => String(b.last_recorded_at).localeCompare(String(a.last_recorded_at)))
     .map(
       (s) => `<tr>
-<td><a href="${base}/tii/${isStatic ? tiiToFileSlug(s.tii) + '.html' : encodeURIComponent(s.tii)}" class="mono">${esc(s.tii)}</a></td>
+<td><a href="/tii/${isStatic ? tiiToFileSlug(s.tii) : encodeURIComponent(s.tii)}" class="mono">${esc(s.tii)}</a></td>
 <td>${esc(s.identifier_status)}</td>
 <td>${esc(s.lifecycle_state)}</td>
 <td>${s.event_count}</td>

@@ -91,6 +91,29 @@ POST /api/tii/tii:xxxx/events
 発火は物理的燃焼を意味せず、真偽値へ還元されません。「未評価／発火記録あり／
 停止記録あり／異議あり」等は表示ラベルであり、データモデルの存在論的状態集合ではありません。
 
+## デプロイ（読み取り専用ミラー）
+
+TIIの正本は追記型ファイル `data/ledger.jsonl` です。サーバレス環境（Vercel等）の
+ファイルシステムは**読み取り専用かつ揮発性**で、監査台帳を置くと記録が失われるため、
+`src/server.js`（書込可能なNodeサーバ）は **ローカル／自前ホスト（永続ボリューム）専用** です。
+
+Vercel には **静的な読み取り専用ミラー** を配信します（要件20：静的ファイル再構築・クラウド非依存）。
+
+- `data/ledger.jsonl` をリポジトリにコミット（＝公開される正本）
+- Vercel ビルド: `node bin/tii.js rebuild-static public`（[vercel.json](vercel.json)）
+- 配信物: 解決ページ `/tii/<id>`、`/tii/<id>.json`、`/ledger.jsonl`・`/ledger.json`・`/ledger.csv`、`/catalog.json`（検証結果込み）、`/spec`
+- **発行・イベント追加はローカル CLI → `git push` → 自動再デプロイ**
+
+```bash
+node bin/tii.js issue --recorder me --note "..."
+node bin/tii.js append --file event.json
+node bin/tii.js verify
+git add data/ledger.jsonl && git commit -m "ledger: ..." && git push
+```
+
+書込可能なWeb運用が必要な場合は、永続ボリュームのあるホスト（Fly.io / Render / VPS）で
+`npm start` を実行してください。
+
 ## 最終監査前チェック（要件27）
 
 本番発行前に SPEC.md §3 の全項目を確定し、§9 の監査項目を確認してください。
