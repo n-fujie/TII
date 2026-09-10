@@ -200,22 +200,29 @@ This is normative. Concretely:
 
 ## 8. Identifier syntax (provisional)
 
-Every value in this table is **not yet finalized**.
+Every value in this table is **not yet finalized**. The identifiers this
+implementation issues today use the *provisional test* form; the *production
+candidate* is under the freeze audit in
+[`spec/`](spec/README.md) and is not enabled.
 
-| Item | Provisional value |
-|---|---|
-| Namespace | `tii:` |
-| Body | 12 characters |
-| Allowed characters | `0-9 a-h j k m n p-t v-z` (Crockford-style; no `i l o u`) |
-| Case | lowercase; compared in lowercase |
-| Generation | CSPRNG with rejection sampling (no modulo bias) |
-| Collision handling | checked against the whole ledger; retried; error on exhaustion |
-| Resolution URL | `<resolver base>/tii/<id>` — the resolver base is a configuration value, not part of the identifier |
-| Revocation / transfer | recorded as events; the identifier string is retained |
+| Item | Provisional test form (current) | Production candidate (audit — not enabled) |
+|---|---|---|
+| Namespace | `tii:` | `tii:` (IANA provisional registration drafted, not filed) |
+| Body | 12 characters | 26 characters |
+| Encoding | Crockford-style, `0-9 a-h j k m n p-t v-z` (no `i l o u`) | RFC 4648 Base32, `a-z 2-7`, unpadded, lowercase |
+| Entropy | ~60 bits | 128 bits (CSPRNG, fail-closed) |
+| Case | lowercase; compared in lowercase | lowercase canonical; uppercase Base32 input normalised |
+| Collision handling | checked against the whole ledger; retried; error on exhaustion | negligible birthday risk + local uniqueness check; collided candidate discarded before it is recorded |
+| Resolution URL | `<resolver base>/tii/<id>` — resolver base is configuration, never part of the identifier | same |
+| Revocation / transfer | recorded as events; the identifier string is retained | same, plus tombstone-style resolution and Ed25519-signed checkpoints |
 
 The identifier is opaque. It must not embed an organization, person, owner,
 year, place, country, category, document type, version, address, domain, theory,
 ignition state, or transition state.
+
+The existing 12-character test identifiers are **not** promoted to production;
+production issuance begins with newly minted 26-character identifiers after the
+syntax freeze. See [`spec/freeze-audit.md`](spec/freeze-audit.md).
 
 ## 9. Test identifiers
 

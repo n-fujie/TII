@@ -21,6 +21,10 @@ Ziran System.
 - [SPEC.md](SPEC.md) / [SPEC.ja.md](SPEC.ja.md) — public specification
 - [ABOUT.md](ABOUT.md) / [ABOUT.ja.md](ABOUT.ja.md)
 - [DESIGN.md](DESIGN.md) — pre-implementation design notes
+- [spec/](spec/README.md) — **production identifier freeze audit** (candidate
+  `tii:` syntax, collision math, IANA draft, Ed25519 checkpoint design,
+  succession policy). Production issuance stays **disabled**; the candidate
+  reference code in `src/candidate/` is not wired in.
 
 ## Public interface
 
@@ -72,7 +76,8 @@ any language can be added later with no schema change. See SPEC.md §6–§7.1 a
 ## Use
 
 ```bash
-node --test          # 66 tests: core + 25 destruction + 15 interface + 11 ledger-integrity
+node --test          # 93 tests: core + destruction + interface + ledger-integrity
+                     #           + candidate identifier/checkpoint (audit only)
 npm start            # http://localhost:3009
 ```
 

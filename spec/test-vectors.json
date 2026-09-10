@@ -1,0 +1,237 @@
+{
+  "$comment": "Machine-readable test vectors for the CANDIDATE TII identifier syntax. Regenerate with `node spec/gen-test-vectors.js`. Not final until the freeze audit is accepted.",
+  "profile": {
+    "scheme": "tii",
+    "entropy_bits": 128,
+    "token_length": 26,
+    "alphabet": "abcdefghijklmnopqrstuvwxyz234567",
+    "valid_final_characters": [
+      "4",
+      "a",
+      "e",
+      "i",
+      "m",
+      "q",
+      "u",
+      "y"
+    ],
+    "padding": false,
+    "case": "lowercase canonical; uppercase Base32 input accepted and normalised"
+  },
+  "base32_roundtrip": [
+    {
+      "bytes_hex": "00000000000000000000000000000000",
+      "token": "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "decodes_to_hex": "00000000000000000000000000000000",
+      "roundtrips": true,
+      "canonical_token": true
+    },
+    {
+      "bytes_hex": "ffffffffffffffffffffffffffffffff",
+      "token": "77777777777777777777777774",
+      "decodes_to_hex": "ffffffffffffffffffffffffffffffff",
+      "roundtrips": true,
+      "canonical_token": true
+    },
+    {
+      "bytes_hex": "000102030405060708090a0b0c0d0e0f",
+      "token": "aaaqeayeaudaocajbifqydiob4",
+      "decodes_to_hex": "000102030405060708090a0b0c0d0e0f",
+      "roundtrips": true,
+      "canonical_token": true
+    },
+    {
+      "bytes_hex": "deadbeefdeadbeefdeadbeefdeadbeef",
+      "token": "32w35366vw7o7xvnx3x55ln654",
+      "decodes_to_hex": "deadbeefdeadbeefdeadbeefdeadbeef",
+      "roundtrips": true,
+      "canonical_token": true
+    }
+  ],
+  "valid_canonical_identifiers": [
+    "tii:aaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "tii:77777777777777777777777774",
+    "tii:aaaqeayeaudaocajbifqydiob4",
+    "tii:32w35366vw7o7xvnx3x55ln654"
+  ],
+  "accepted_then_canonicalized": [
+    {
+      "input": "TII:aaaqeayeaudaocajbifqydiob4",
+      "canonical": "tii:aaaqeayeaudaocajbifqydiob4"
+    },
+    {
+      "input": "tii:AAAQEAYEAUDAOCAJBIFQYDIOB4",
+      "canonical": "tii:aaaqeayeaudaocajbifqydiob4"
+    },
+    {
+      "input": "Tii:aaaqeayeaudaocajbifqydiob4",
+      "canonical": "tii:aaaqeayeaudaocajbifqydiob4"
+    }
+  ],
+  "rejected_inputs": [
+    {
+      "input": "",
+      "code": "empty",
+      "actual_code": "empty",
+      "matches": true
+    },
+    {
+      "input": "aaaqeayeaudaocajbifqydiob4",
+      "code": "missing-scheme",
+      "actual_code": "missing-scheme",
+      "matches": true
+    },
+    {
+      "input": "doi:aaaqeayeaudaocajbifqydiob4",
+      "code": "bad-scheme",
+      "actual_code": "bad-scheme",
+      "matches": true
+    },
+    {
+      "input": "urn:tii:aaaqeayeaudaocajbifqydiob4",
+      "code": "bad-scheme",
+      "actual_code": "bad-scheme",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob",
+      "code": "bad-length",
+      "note": "25 chars",
+      "actual_code": "bad-length",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob4a",
+      "code": "bad-length",
+      "note": "27 chars",
+      "actual_code": "bad-length",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob0",
+      "code": "bad-char",
+      "note": "digit 0 is NOT mapped to o",
+      "actual_code": "bad-char",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob1",
+      "code": "bad-char",
+      "note": "digit 1 is NOT mapped to i or l",
+      "actual_code": "bad-char",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob8",
+      "code": "bad-char",
+      "actual_code": "bad-char",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob9",
+      "code": "bad-char",
+      "actual_code": "bad-char",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaaaaaaaaaaaaaaaaaaaaaaab",
+      "code": "non-canonical-tail",
+      "note": "non-zero trailing bits",
+      "actual_code": "non-canonical-tail",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob4=",
+      "code": "padding",
+      "actual_code": "padding",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob4====",
+      "code": "padding",
+      "actual_code": "padding",
+      "matches": true
+    },
+    {
+      "input": " tii:aaaqeayeaudaocajbifqydiob4",
+      "code": "whitespace",
+      "actual_code": "whitespace",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob4 ",
+      "code": "whitespace",
+      "actual_code": "whitespace",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudao\tajbifqydiob4",
+      "code": "whitespace",
+      "actual_code": "whitespace",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiobé",
+      "code": "non-ascii",
+      "actual_code": "non-ascii",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydioａｂ",
+      "code": "non-ascii",
+      "note": "full-width latin",
+      "actual_code": "non-ascii",
+      "matches": true
+    },
+    {
+      "input": "tii:%41qeayeaudaocajbifqydiob4",
+      "code": "percent-encoding",
+      "actual_code": "percent-encoding",
+      "matches": true
+    },
+    {
+      "input": "tii://aaaqeayeaudaocajbifqydiob4",
+      "code": "authority",
+      "actual_code": "authority",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob4/",
+      "code": "path",
+      "actual_code": "path",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob4/extra",
+      "code": "path",
+      "actual_code": "path",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob4?x=1",
+      "code": "query",
+      "actual_code": "query",
+      "matches": true
+    },
+    {
+      "input": "tii:aaaqeayeaudaocajbifqydiob4#frag",
+      "code": "fragment",
+      "actual_code": "fragment",
+      "matches": true
+    }
+  ],
+  "resolution_urls_are_separate": {
+    "identifier": "tii:aaaqeayeaudaocajbifqydiob4",
+    "token": "aaaqeayeaudaocajbifqydiob4",
+    "resolution_url_example_a": "https://resolver.example/tii/aaaqeayeaudaocajbifqydiob4",
+    "resolution_url_example_b": "https://another-host.test/tii/aaaqeayeaudaocajbifqydiob4",
+    "note": "Changing the resolver base does not change the identifier or the token."
+  },
+  "example_identifiers_non_normative": [
+    "tii:57kdge4okastyqn7dtwsf3fulq",
+    "tii:qchgvfmasqs4vth437276sucn4",
+    "tii:wbf4sq4rwxznxgiu2hrkndzl5u"
+  ],
+  "all_rejections_match": true,
+  "all_roundtrips_ok": true
+}
