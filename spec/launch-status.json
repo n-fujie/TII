@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-11T09:00:00.000Z",
-  "commit": "1e50f82",
-  "note": "Machine-readable launch status. G8 (governance) moved from UNRESOLVED to PASS via explicit human confirmation captured in spec/human-decisions.md (C/D/E/F all resolved to Naoto Fujie as the accountable individual and IANA/Change-Controller contact, P/A Institute retained as the public operating name) -- not inferred, not assumed from silence. No gate was marked PASS merely because more documentation now exists; G8 specifically required an explicit human-supplied value for every field before moving. See spec/production-launch-gate.md and spec/external-infrastructure-closure.md for the full G1-G14 narrative and spec/human-decisions.md for the governance-resolution decision trail.",
+  "generated_at": "2026-09-12T00:00:00.000Z",
+  "commit": "f00ecab",
+  "note": "Machine-readable launch status. G8 (governance) moved from UNRESOLVED to PASS via explicit human confirmation captured in spec/human-decisions.md (C/D/E/F all resolved to Naoto Fujie as the accountable individual and IANA/Change-Controller contact, P/A Institute retained as the public operating name) -- not inferred, not assumed from silence. G13 (release artifacts) moved from CONDITIONAL_PASS to PASS via the steward's explicit written acceptance of the TII 1.0 Production Candidate bundle, which does not declare TII 1.0 final and does not authorize production issuance, key generation, domain registration, or IANA submission. No gate was marked PASS merely because more documentation now exists or because artifacts were regenerated -- both moves required an explicit human decision. See spec/production-launch-gate.md and spec/external-infrastructure-closure.md for the full G1-G14 narrative and spec/human-decisions.md for the decision trail.",
 
   "overall_launch_status": "NOT_READY",
 
@@ -55,7 +55,7 @@
     "G10_public_only_policy": "PASS",
     "G11_security": "PASS",
     "G12_reconstruction_succession": "PASS",
-    "G13_release_artifacts": "CONDITIONAL_PASS",
+    "G13_release_artifacts": "PASS",
     "G14_first_issuance_procedure": "PASS"
   },
 
@@ -78,7 +78,7 @@
     "fallback_conditional_on": "unperformed trademark/confusion clearance search",
     "recommended_registrar": "Cloudflare Registrar",
     "iana_registry_status": "CLEAR (tii absent -- re-checked live this phase)",
-    "iana_draft_completeness": "COMPLETE on technical fields; INCOMPLETE on governance fields (Contact, Change Controller, Specification URL)",
+    "iana_draft_completeness": "COMPLETE on technical fields and on Contact/Change Controller (both Naoto Fujie, resolved with G8); still INCOMPLETE on Specification URL (depends on domain registration, not yet executed)",
     "key_custody_model": "two-copy: operational (encrypted file or OS secret store) + offline backup, different account/vendor from each other; no production key generated",
     "governance_models_presented": ["Model A: individual Change Controller", "Model B: organization Change Controller, P/A Institute as operating name if legally accurate"],
     "governance_model_chosen": "Model A (individual Change Controller)",
@@ -119,8 +119,21 @@
     { "gate": "G3", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": ["F", "H"], "external_action_required": false, "blocker": "no production key exists", "next_irreversible_action": "generate the production key per the documented ceremony" },
     { "gate": "G7", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": ["A", "B", "G"], "external_action_required": true, "blocker": "no domain purchased", "next_irreversible_action": "register transition-ignition-id.org via Cloudflare Registrar" },
     { "gate": "G8", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- resolved via explicit human confirmation, see spec/human-decisions.md" },
-    { "gate": "G9", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": ["I"], "external_action_required": true, "blocker": "3 governance-dependent fields open (Contact, Change Controller, Spec URL)", "next_irreversible_action": "submit the provisional registration once G7/G8 resolve" }
+    { "gate": "G9", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": ["I"], "external_action_required": true, "blocker": "Specification URL open (depends on domain registration); fresh IANA re-check required immediately before submission", "next_irreversible_action": "submit the provisional registration once G7 (domain) resolves and a fresh IANA check is performed" },
+    { "gate": "G13", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- accepted via explicit steward decision 2026-09-12, see spec/human-decisions.md and spec/production-launch-gate.md's G13 closure note" }
   ],
+
+  "release_artifacts_acceptance": {
+    "accepted": true,
+    "accepted_at": "2026-09-12",
+    "bundle_label": "TII 1.0 Production Candidate",
+    "declares_final": false,
+    "authorizes_production_issuance": false,
+    "authorizes_key_generation": false,
+    "authorizes_domain_registration": false,
+    "authorizes_iana_submission": false,
+    "artifacts_regenerated_or_reaudited": false
+  },
 
   "human_decisions_required": {
     "A": "Approve final permanent domain",
@@ -138,7 +151,6 @@
     "G7 resolver: domain (transition-ignition-id.org) and registrar (Cloudflare Registrar) approved, registration authorized, but not yet actually registered -- requires the human operator's own action (this agent has no registrar account or payment method).",
     "G9 IANA: registration not submitted; submission conditionally authorized but blocked on actual domain registration, a stable specification URL (depends on the domain), and role email (also depends on the domain). Requires one fresh IANA registry re-check immediately before actual submission.",
     "G3 key custody: no production signing key has been generated, backed up, or distributed to accountable custodians yet -- the two-copy model, generation ceremony, and key-loss model are all documented and the code path is ready, but the key does not exist.",
-    "G13 release artifacts: complete as of this task, but not yet reviewed/accepted by the steward as final -- labeled 'TII 1.0 Production Candidate', not final.",
     "TII_PRODUCTION_ISSUANCE_ENABLED is not set to 'true' anywhere in the committed configuration, and no override was made by this task."
   ],
 
@@ -154,6 +166,8 @@
     "production_private_key_generated": false,
     "production_private_key_committed": false,
     "external_witness_falsely_claimed": false,
-    "production_issuance_disabled": true
+    "production_issuance_disabled": true,
+    "release_artifacts_declared_final_without_steward_acceptance": false,
+    "technical_content_altered_to_obtain_acceptance": false
   }
 }

@@ -406,7 +406,7 @@ and exact rebuild instructions. **No private key material included.**
 | Artifact | File | Status |
 |---|---|---|
 | TII Identifier Syntax and Resolution Specification 1.0 | `spec/identifier-syntax-1.0-candidate.md` | frozen (Appendix B) |
-| Governance and Succession Policy | `spec/governance-candidate.md`, `spec/succession-policy.md`, `spec/succession-manifest.md` | governance UNRESOLVED at legal-entity level; succession policy/manifest complete |
+| Governance and Succession Policy | `spec/governance-candidate.md`, `spec/succession-policy.md`, `spec/succession-manifest.md` | complete — governance resolved 2026-09-11 (G8 PASS, `spec/governance-finalization.md` §10); this cell corrected 2026-09-12 as an administrative consistency update, not a reopening of accepted technical content |
 | Public-Only Scope Policy | `spec/public-only-1.0.md` | complete |
 | Checkpoint Verification Specification | `spec/checkpoint-operation.md` | complete |
 | Single-Writer Operational Model | `spec/single-writer-model.md` | complete |
@@ -425,9 +425,12 @@ New this phase: `spec/production-launch-gate.md` (this document),
 requires the steward's explicit review and acceptance, which is outside
 this task's authority to grant.
 
-**Status: CONDITIONAL PASS** — every required document exists and is
-internally consistent; "final" acceptance is a steward decision this task
-does not make.
+**Status: PASS** *(accepted 2026-09-12 — see the closure note appended at
+the end of this document)*. The bundle was CONDITIONAL PASS from this
+phase's original writing until the steward explicitly accepted it; every
+required document existed and was internally consistent throughout, and
+"final" acceptance was always the only thing withheld pending an actual
+steward decision.
 
 ## §G14 — First production issuance procedure
 
@@ -539,7 +542,7 @@ non-promotion tests.
 | G10 — Public-only policy | **PASS** |
 | G11 — Security | **PASS** |
 | G12 — Reconstruction/succession | **PASS** |
-| G13 — Release artifacts | **CONDITIONAL PASS** |
+| G13 — Release artifacts | **PASS** *(accepted 2026-09-12 — see the closure note appended at the end of this document)* |
 | G14 — First-issuance procedure | **PASS** |
 
 ## OVERALL LAUNCH STATUS: **NOT READY**
@@ -549,9 +552,10 @@ section was originally written, five did not: G3 (no production key
 generated yet — procedure ready), G7 (no domain purchased — candidates
 confirmed available today), G8 (governance legal identity genuinely
 unresolved — not guessed), G9 (IANA not submitted, pending G7/G8), and G13
-(release artifacts complete but pending steward acceptance). **G8 has
-since resolved — see the closure note at the end of this document.** Four
-now do not: G3, G7, G9, G13. **There is still no automatic launch.** This
+(release artifacts complete but pending steward acceptance). **G8 and G13
+have since resolved — see the closure notes at the end of this
+document.** Three now do not: G3, G7, G9. **There is still no automatic
+launch.** This
 document prepares TII for issuance. It does not authorize it.
 
 ---
@@ -622,8 +626,42 @@ status off NOT READY.** G3 (no key generated), G7 (domain approved and
 registration authorized, but not yet actually registered), and G9
 (submission conditionally authorized, blocked on the still-unregistered
 domain and the specification URL/role email that depend on it) remain
-CONDITIONAL PASS; G13 remains CONDITIONAL PASS pending steward acceptance.
-**Production issuance remains DISABLED** — G8 resolving authorizes nothing
-by itself; see `spec/human-decisions.md`'s Final Approval Capture for
-exactly what was and was not authorized, and its Execution plan for what
-remains to actually be done, by whom, before any of it happens.
+CONDITIONAL PASS. **Production issuance remains DISABLED** — G8 resolving
+authorizes nothing by itself; see `spec/human-decisions.md`'s Final
+Approval Capture for exactly what was and was not authorized, and its
+Execution plan for what remains to actually be done, by whom, before any
+of it happens.
+
+---
+
+## G13 closure (appended 2026-09-12) — G13: CONDITIONAL PASS → PASS
+
+The steward explicitly accepted the TII 1.0 Production Candidate release
+artifact bundle (the table in §G13 above), in writing:
+
+> "I explicitly accept the TII 1.0 Production Candidate release artifacts
+> as the current release-candidate bundle."
+
+With the scope of that acceptance stated explicitly by the steward and
+preserved verbatim here — this acceptance:
+
+- closes G13 as PASS;
+- does **not** declare TII 1.0 final;
+- does **not** authorize production TII issuance;
+- does **not** authorize production key generation;
+- does **not** itself execute domain registration or IANA submission.
+
+**No artifact was regenerated, re-audited, or technically modified to
+obtain this acceptance.** The one change made alongside it was the
+administrative correction the steward separately authorized: the §G13
+table's "Governance and Succession Policy" row, which still described
+governance as "UNRESOLVED at legal-entity level" from before G8 resolved,
+now reads "complete" with a note explaining the correction — a stale
+cross-reference fix, not a reopening of any accepted content.
+
+**G13 — Release artifacts: PASS.**
+
+**This does not change G3, G7, or G9, and does not move overall launch
+status off NOT READY.** Those three remain CONDITIONAL PASS for the
+reasons already recorded above and in `spec/launch-status.json`.
+**Production issuance remains DISABLED.**

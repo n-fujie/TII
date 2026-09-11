@@ -443,3 +443,44 @@ execute, or bring forward any external action (domain registration, key
 generation, or IANA submission) — those remain exactly as authorized or
 not authorized in the Final Approval Capture above. No external action was
 taken in producing this update; canonical ledger unchanged.
+
+## G13 release-artifact acceptance (2026-09-12)
+
+The steward explicitly accepted the TII 1.0 Production Candidate release
+artifact bundle (`spec/production-launch-gate.md` §G13), in writing:
+
+> "I explicitly accept the TII 1.0 Production Candidate release artifacts
+> as the current release-candidate bundle."
+>
+> "This acceptance: closes G13 as PASS; does not declare TII 1.0 final;
+> does not authorize production TII issuance; does not authorize
+> production key generation; does not itself execute domain registration
+> or IANA submission."
+
+**G13 — Release artifacts: PASS.** No artifact was regenerated,
+re-audited, or technically altered to obtain this acceptance. One
+administrative correction was made alongside it, explicitly authorized by
+the steward in the same message ("The stale pre-G8 governance status
+cross-reference may be corrected as an administrative consistency update
+without reopening the accepted technical content"): the §G13 table's
+"Governance and Succession Policy" row, which had still read "UNRESOLVED
+at legal-entity level" from before G8 resolved, now reads "complete" with
+a note explaining the correction.
+
+### Updated overall picture
+
+```
+G3  Production key custody   CONDITIONAL PASS  (model approved; no key generated)
+G7  Permanent resolver        CONDITIONAL PASS  (domain approved + registration authorized; not yet registered)
+G8  Governance                 PASS
+G9  IANA                       CONDITIONAL PASS  (submission conditionally authorized; Specification URL still depends on domain)
+G13 Release artifacts          PASS              (this update)
+```
+
+**Overall launch status: still NOT READY** — G3, G7, and G9 remain the
+open gates, all blocked on external actions (domain registration, key
+generation, and the domain/spec-URL/IANA-submission chain that follows) no
+document update can resolve on its own. **Production issuance remains
+DISABLED.** No external action was taken in producing this update:
+canonical ledger unchanged, no domain registered, no key generated, no
+IANA submission sent.
