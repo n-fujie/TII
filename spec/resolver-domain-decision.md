@@ -301,3 +301,154 @@ this task.** G7 status in the launch-gate table: **CONDITIONAL PASS** — the
 decision framework and current availability are both confirmed; only an
 explicit purchase authorization (outside this task's authority) and,
 for `tii-id.org` specifically, the trademark clearance search, remain.
+
+## 14. External Infrastructure Closure re-check (2026-09-11, same day) — appended, nothing above erased
+
+### 14.1 Fresh RDAP re-check
+
+Performed again, independently, in this phase — not reused from §13. Method
+validated the same way: a live, known-registered control domain
+(`iana.org`) was queried in the same session and returned full registration
+data (`status: ["server delete prohibited", "server transfer prohibited",
+"server update prohibited"]`, no `errorCode`), confirming the RDAP endpoint
+correctly distinguishes registered from unregistered domains at the moment
+of this check.
+
+| Candidate | RDAP `errorCode` | Result |
+|---|---|---|
+| `transition-ignition-id.org` | `404` | **CONFIRMED AVAILABLE** |
+| `tii-id.org` | `404` | **CONFIRMED AVAILABLE** |
+
+Neither status is reported as UNKNOWN — the control check succeeded and
+both candidate lookups returned an unambiguous, machine-readable "object
+not found" response from the registry itself (Public Interest Registry's
+RDAP service), not a network error, a timeout, or an ambiguous page.
+
+### 14.2 Domain decision — re-audited, frozen this phase
+
+This task's framing designates `transition-ignition-id.org` **PRIMARY**
+and `tii-id.org` **SECONDARY**, reasoning: `tii-id.org` leads with the bare
+`tii` string, which is the exact abbreviation used by Technology
+Innovation Institute (Abu Dhabi, `tii.ae`) — an adjacent, well-resourced
+research body in the same general subject area (cryptography, secure
+systems). `transition-ignition-id.org` spells out the full scheme name and
+carries no material collision exposure with any identified third party.
+This reorders, but does not contradict, §12's PRIMARY (conditional)/
+FALLBACK table above — that table's own PRIMARY was already explicitly
+"conditional on trademark clearance," which was never performed and is
+still not performed. Re-auditing the full criteria set today:
+
+| Criterion | `transition-ignition-id.org` | `tii-id.org` |
+|---|---|---|
+| Current availability (2026-09-11, this check) | Available | Available |
+| First-year price (representative, `.org`) | ~$10–13 | ~$10–13 |
+| Renewal price (representative) | ~$10–16 | ~$10–16 |
+| Registrar | not yet selected — see §14.3 | same |
+| Transfer-out support | standard EPP auth-code, any accredited registrar | same |
+| DNSSEC | supported (PIR `.org`) | same |
+| Registrar lock | owner-toggleable at any credible registrar | same |
+| WHOIS/RDAP behavior | standard PIR RDAP, confirmed working (§14.1) | same |
+| Account recovery / 2FA / hardware-key | depends on registrar choice, not the domain — see §14.3 | same |
+| DNS portability | full — no registrar-mandated DNS | same |
+| Hosting portability | full — domain and host are independent | same |
+| Spelling stability | long, but unambiguous and stable — no abbreviation to misremember | short; "tii-id" could be mis-typed as "tii.id" or similar |
+| Long-term conceptual durability | high — names the scheme itself | high, but tied to an abbreviation shared with unrelated orgs |
+| Trademark / confusion exposure | **minimal** | **moderate — unresolved**, requires a clearance search not performed by this or any prior task |
+| Institutional neutrality | high — no tie to P/A Institute, hosting, or theory | high, same structural property, but weaker on the collision axis |
+
+**FINAL RECOMMENDED DOMAIN: `transition-ignition-id.org`.**
+**FALLBACK DOMAIN: `tii-id.org`, conditional on a trademark/confusion
+clearance search (USPTO TESS, EUIPO eSearch, WIPO Global Brand Database,
+UAE mark check — Nice classes 9, 35, 42, 45) completing without a blocking
+or plausibly-confusing result.**
+
+Neither is purchased by this task.
+
+### 14.3 Registrar decision
+
+Re-evaluated with the expanded criteria this phase requires (security,
+predictable renewal pricing, transfer portability, DNS independence,
+account-recovery quality, 2FA/hardware-key support, no unnecessary hosting
+lock-in) — not cheapest-price-only:
+
+| Registrar | Security / 2FA | Hardware-key (WebAuthn/FIDO2) support | Renewal pricing predictability | Transfer portability | DNS independence | Hosting lock-in |
+|---|---|---|---|---|---|---|
+| **Cloudflare Registrar** | Strong account 2FA (TOTP + WebAuthn) | **Yes** | At-cost, no markup — most predictable | Standard EPP auth-code, no add-on fee | Requires Cloudflare DNS (a real constraint, not a lock-in on hosting) | None — hosting-agnostic |
+| **Porkbun** | TOTP 2FA | No | Stable historically, not contractually guaranteed | Standard EPP auth-code | Full — any DNS provider | None |
+| **Namecheap** | TOTP 2FA | No | Renewal notably higher than promotional first year | Standard EPP auth-code | Full | None |
+| **Gandi** | TOTP 2FA | No | Higher baseline, stable | Standard EPP auth-code | Full | None |
+| Vercel Domains | Tied to Vercel account | No | Varies, resold | Adds an extra step (decouple from hosting account first) | Tied to Vercel by default | **Yes — rejected on this basis alone (§7/§8 of this document, unchanged)** |
+
+**Recommendation: Cloudflare Registrar** — the only option in this
+comparison offering hardware-key (WebAuthn/FIDO2) account protection, at-cost
+pricing (removes the "surprise renewal" risk that at-cost eliminates by
+definition), and full DNSSEC support, at the cost of a soft DNS
+requirement (Cloudflare DNS) that does not constrain *hosting* in any way
+(TII's hosting is already provider-agnostic — see §7). This is a security-
+and-predictability choice, not a cheapest-price choice; Porkbun is the
+documented fallback if Cloudflare's DNS requirement is later judged
+undesirable.
+
+**The registrar is replaceable infrastructure and is never part of TII
+identity** — unchanged principle, §7/§8 above.
+
+### 14.4 Domain authorization packet
+
+```
+Recommended domain:      transition-ignition-id.org
+Registrar:                Cloudflare Registrar
+Initial price:             ~$10.44/yr (at cost, .org, subject to re-quote at purchase)
+Renewal price:              ~$10.44/yr (at cost, no markup)
+DNSSEC:                    Supported, will be enabled at registration
+Transfer support:           Standard EPP auth-code; ICANN 60-day post-registration lock applies
+Brand/confusion finding:    Minimal exposure — no material collision identified
+Reason for selection:       Names the scheme unambiguously; avoids the
+                            Technology Innovation Institute ("TII", tii.ae)
+                            collision that the tii-id.org candidate carries;
+                            registrar offers at-cost pricing, DNSSEC, and
+                            hardware-key account protection
+
+ACTION REQUIRING HUMAN AUTHORIZATION:
+REGISTER / DO NOT REGISTER
+```
+
+**Not registered. Awaiting explicit human authorization — REGISTER or DO
+NOT REGISTER is not decided by this task.**
+
+### 14.5 DNS plan (final, for the recommended domain, not deployed)
+
+Unchanged in substance from §9 above; restated concretely for
+`transition-ignition-id.org` specifically:
+
+| Record | Plan |
+|---|---|
+| Apex (`transition-ignition-id.org`) | `A`/`AAAA` or `ALIAS`/`ANAME` to the then-current hosting target (Vercel today; portable) |
+| `www` | `CNAME` to apex, with a 301 `www → apex` at the application layer |
+| HTTPS | Required; HTTP 301s to HTTPS |
+| DNSSEC | Signed zone at registration; DS record published at the registrar |
+| `CAA` | `0 issue "letsencrypt.org"` (+ the active host's CA if different); `0 iodef "mailto:security@transition-ignition-id.org"` once role mail exists (§Governance) |
+| Mail (`MX`/`SPF`/`DKIM`/`DMARC`) | **Not added now.** Added only once role email addresses are separately authorized (`spec/governance-finalization.md` §Role Emails) |
+| Migration to another host | Repoint the apex record and `TII_RESOLVER_BASE_URL` stays unchanged (it already names the domain, not the host) — zero TII-side change |
+
+**No DNS record is created by this task.** This plan activates only after
+§14.4's REGISTER decision and a separate DNS-configuration authorization.
+
+### 14.6 Resolver configuration — reconfirmed
+
+- `TII_RESOLVER_BASE_URL` remains the single authoritative source
+  (`src/server.js`, `src/export.js`) — unchanged, re-verified by code
+  inspection this phase (no new resolver-base reference was added anywhere
+  by the production-gate wiring in the prior phase).
+- Identifier tokens contain no domain — unchanged (`src/identifier.js`
+  `generateIdentifier()` takes no domain parameter).
+- Moving hosts, changing registrar, or changing DNS provider each require
+  zero TII code or identifier changes — one environment variable, set once
+  the domain is approved and configured.
+
+G7 remains **CONDITIONAL PASS**: the decision is now fully frozen (one
+recommended domain, one fallback, one recommended registrar, a complete
+authorization packet, and a DNS plan) — everything that can be prepared
+without an irreversible external action has been prepared. It becomes PASS
+only once a human explicitly authorizes registration and the domain is
+actually live and tested (`spec/production-launch-gate.md` §33, gated on
+authorization).

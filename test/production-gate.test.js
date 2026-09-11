@@ -249,15 +249,28 @@ test('dry-run candidate identifiers are 26-char production-profile tokens, never
   assert.doesNotMatch(result.candidate_identifier, /^tii:[0-9a-z]{12}$/, 'must not resemble a TEST identifier');
 });
 
-test('a REAL (non-dry-run) production issuance succeeds ONLY when the gate is open, mints identifier_status "production", checkpoints itself, and never reuses/promotes a test identifier', () => {
+/**
+ * NOMENCLATURE (spec/external-infrastructure-closure.md §0): this is a
+ * PRODUCTION-PATH INTEGRATION TEST against an ISOLATED DISPOSABLE LEDGER.
+ * The identifier it mints is an EPHEMERAL GENERATED IDENTIFIER, not a
+ * production TII: it is never part of the canonical registry, never
+ * reserved in the production namespace, never publicly resolved, and MUST
+ * NOT later be intentionally selected or reused as an actual production
+ * identifier. It exists only to prove the code path works end to end while
+ * the gate happens to be forced open on throwaway state. This is the ONLY
+ * test in this suite that exercises the non-dry-run branch of
+ * issueProductionTII(); it never touches data/ledger.jsonl.
+ */
+test('production-path integration test (isolated disposable ledger): the gated issuance path succeeds ONLY when the gate is open, mints identifier_status "production", checkpoints itself, and never reuses/promotes a test identifier', () => {
   const { file, ledger } = freshLedger();
+  assert.notEqual(file, path.join(__dirname, '..', 'data', 'ledger.jsonl'), 'sanity: this test\'s ledger file is NOT the canonical repository ledger');
   const { tii: testTii } = ledger.issueTII({ recorder: { id: 't', kind: 'person' } }); // a normal TEST identifier exists first
   assert.equal(identifierProd.isWellFormed(testTii), false, 'sanity: the test identifier is NOT well-formed under the production profile (12 chars, different alphabet)');
 
   const { env, checkpointDir } = allSatisfiedFor(ledger, []);
   const result = issueProductionTII(ledger, { env, checkpointDir, recorder: { id: 'launch-operator', kind: 'person' } });
 
-  assert.match(result.tii, /^tii:[a-z2-7]{26}$/, 'production identifier follows the frozen 26-char profile');
+  assert.match(result.tii, /^tii:[a-z2-7]{26}$/, 'the ephemeral generated identifier follows the frozen 26-char profile');
   assert.notEqual(result.tii, testTii, 'a NEW identifier was minted, the existing test identifier was not reused or promoted');
   assert.equal(result.event.content.identifier_status, 'production');
   assert.equal(ledger.forTII(testTii)[0].content.identifier_status, 'test', 'the pre-existing test identifier is untouched and still status "test"');
@@ -268,10 +281,18 @@ test('a REAL (non-dry-run) production issuance succeeds ONLY when the gate is op
   assert.equal(postCheck.status, 'VERIFIED');
   assert.equal(postCheck.matches_current_head, true, 'the new checkpoint covers the just-appended production event');
 
+  // REGRESSION: this ephemeral identifier must never appear in the canonical
+  // repository ledger -- confirms the disposable test fixture was never
+  // written anywhere near the real registry.
+  const canonicalLedgerText = fs.readFileSync(path.join(__dirname, '..', 'data', 'ledger.jsonl'), 'utf8');
+  assert.ok(!canonicalLedgerText.includes(result.tii), 'the ephemeral generated identifier from this integration test must never appear in the canonical repository ledger');
+
   // this test itself is the ONLY place in this entire suite where the gate is
-  // open AND a real (non-dry-run) production issuance is executed -- and it
-  // runs against a fully disposable, throwaway ledger under os.tmpdir(),
-  // never against data/ledger.jsonl. See spec/production-launch-gate.md §0.
+  // open AND the non-dry-run branch of issueProductionTII() executes -- and
+  // it runs against a fully disposable, throwaway ledger under os.tmpdir(),
+  // never against data/ledger.jsonl. See spec/production-launch-gate.md §0
+  // and spec/external-infrastructure-closure.md §0 for the exact
+  // nomenclature this test title and these comments use.
 });
 
 test('§17 if checkpoint creation fails after a committed production mutation, the mutation is NOT hidden or rolled back, and further production mutations are blocked', () => {

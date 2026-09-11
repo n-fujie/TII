@@ -285,7 +285,9 @@ purchased and DNS-configured under separate, explicit authorization
 ## §G8 — Governance finalization
 
 Required distinctions (`spec/governance-candidate.md`, unchanged this
-phase):
+phase; see also `spec/governance-finalization.md`, added in the follow-up
+External Infrastructure Closure phase, for the seven-role separation, the
+two non-inventive legal-identity models, and the human-input form):
 
 | Field | Status |
 |---|---|
@@ -501,7 +503,7 @@ admin security tests (including the two new permanent regression tests
 from adversarial verification), writer-lock tests, crash-recovery tests,
 the adversarial-verification-phase security tests (unchanged, carried
 forward), and 28 new production-gate tests (fail-closed matrix, dry-run,
-real gated issuance demonstrated exactly once against a disposable ledger,
+a production-path integration test against an isolated disposable ledger,
 checkpoint policy, collision handling, test/production separation). **No
 pre-existing test was weakened to obtain a green result** — the only test
 behavior changes are in `test/identifier.test.js`'s final two tests, which
@@ -549,3 +551,40 @@ genuinely unresolved — not guessed), G9 (IANA not submitted, pending
 G7/G8), and G13 (release artifacts complete but pending steward
 acceptance). **There is no automatic launch.** This document prepares TII
 for issuance. It does not authorize it.
+
+---
+
+## External Infrastructure Closure (appended 2026-09-11, same day)
+
+G3, G7, G8, and G9 above were closed further — to "ready pending explicit
+human authorization" — in a dedicated follow-up phase. **None changed
+status** (G3/G7/G9 remain CONDITIONAL PASS, G8 remains UNRESOLVED; overall
+launch status is unchanged: **NOT READY**) — what changed is that every
+remaining blocker for each is now a named human decision or an
+already-specified external action, not an open-ended "more work needed."
+Full detail, a live RDAP/IANA re-check performed the same day, a frozen
+domain/registrar recommendation, a governance role-separation model with a
+human-input form, an extended key-custody model (storage comparison,
+generation ceremony, key-loss model), a consolidated HUMAN DECISIONS
+REQUIRED list, and a final closure table with an exact "next irreversible
+action" per gate: [external-infrastructure-closure.md](external-infrastructure-closure.md).
+New/extended companion documents:
+[governance-finalization.md](governance-finalization.md) (new — role
+separation, legal-identity models A/B, human-input form),
+[resolver-domain-decision.md](resolver-domain-decision.md) §14 (domain/
+registrar decision frozen, authorization packet, DNS plan),
+[iana-provisional-registration.md](iana-provisional-registration.md)
+(technical fields finalized, submission authorization packet),
+[production-key-custody.md](production-key-custody.md) §7 (storage
+options, generation ceremony, key-loss model),
+[succession-manifest.md](succession-manifest.md) §11–§12 (operational
+roles, bus-factor audit).
+
+This phase also corrected an audit-phrasing issue in the prior phase's §49
+and in `test/production-gate.test.js`: the one test exercising the
+non-dry-run production-issuance branch is now titled and commented as a
+**"production-path integration test (isolated disposable ledger)"**
+minting an **"ephemeral generated identifier"** — never described as a
+production TII — with a new regression assertion confirming that
+identifier never appears in the canonical `data/ledger.jsonl`. See
+`external-infrastructure-closure.md` §0.

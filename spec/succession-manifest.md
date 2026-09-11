@@ -152,3 +152,52 @@ These four things — reconstructable identity/history, authority
 credentials, domain continuity, and signing-key custody — are kept
 explicitly separate here and must never be conflated when this manifest is
 updated in the future.
+
+## 11. Operational roles — the six questions (External Infrastructure Closure, 2026-09-11)
+
+| Question | Current answer |
+|---|---|
+| Who controls the domain? | **Nobody yet — no domain is registered** (`spec/resolver-domain-decision.md` §14). Once registered, this must be filled in with the registrant/controller from `spec/governance-finalization.md` §6. |
+| Who can transfer the domain? | Same as above — not yet applicable. |
+| Who controls IANA Change Controller updates? | **Nobody yet — nothing is registered with IANA.** Once registered, the accountable party is whoever `spec/governance-finalization.md` §3/§6 resolves to (Model A individual or Model B entity). |
+| Who controls the public specification? | The current steward (P/A Institute, candidate — `spec/governance-candidate.md`), via the source repository (`https://github.com/n-fujie/TII`). |
+| Who holds the signing key? | **Nobody — no production signing key exists** (`spec/production-key-custody.md`). |
+| Who holds the offline key backup? | Not applicable — see above. |
+
+Every row above reading "nobody yet" is an honest statement of current
+state, not a gap in this manifest — see
+`spec/production-launch-gate.md`'s Final Closure Table for exactly what
+remains before each can be filled in.
+
+## 12. Bus-factor audit (qualitative)
+
+Per this phase's explicit instruction: **do not falsely claim
+institutional resilience where one person currently controls everything.**
+At TII's current, pre-production scale, one-person operation is honestly
+what exists, and that is acceptable **only if documented honestly and
+recovery material is kept separated** (never collapsed into a single
+account/credential/location).
+
+| Asset | Current single point of failure? | Why / mitigation status |
+|---|---|---|
+| Registrar credentials | N/A — no registrar account exists yet | When created: must not be the sole credential holder's only account recovery path — `spec/resolver-domain-decision.md` §14.3 recommends hardware-key (WebAuthn/FIDO2) 2FA specifically to raise the bar on this single point |
+| DNS | N/A — no DNS configured yet | Tied to the registrar/DNS-provider account above until otherwise separated |
+| Git repository (source + specification) | **Yes, currently** — hosted at `github.com/n-fujie/TII`, a single GitHub account | Mitigated by full local clonability (`spec/succession-manifest.md` §9) — the repository's *content* survives even if the *hosting account* does not, but the ability to push further official commits does not, until a second maintainer or an organizational account is established |
+| Signing private key (operational copy) | N/A — does not exist yet | When generated: single-copy-in-one-place is exactly what §7.3 of `spec/production-key-custody.md` explicitly forbids |
+| Signing private key (offline backup) | N/A — does not exist yet | Must be a **different** person/account/vendor than the operational copy, per `spec/production-key-custody.md` §7.3 |
+| IANA contact | N/A — not yet named | A role-email forwarding address (§7 above) reduces this once a domain exists, but IANA's actual contact-of-record is a named person, which is inherently one accountable individual at a time |
+| Change Controller | N/A — not yet resolved (Model A or B) | Model B (organization) spreads this across an entity's account-holders rather than one individual, at the cost of the entity needing to genuinely exist — see `spec/governance-finalization.md` §3 |
+| Domain email (role addresses) | N/A — not created | Same account-separation discipline as the registrar row applies once created |
+| Ledger source (`data/ledger.jsonl`) | **No** — fully reconstructable from any repository clone; no single point of failure once more than one clone exists (which is already true: this repository, any contributor's local clone, and the GitHub-hosted copy) |
+| Checkpoint copies | N/A — none exist yet | Once they do: must be retained in more than one location per `spec/checkpoint-operation.md` and `spec/phase1-adversarial-verification.md` L3 — a checkpoint held only where the ledger also lives protects against nothing |
+
+**Honest summary:** today, a single GitHub account is the practical single
+point of failure for *continuing official development* (not for the
+*data*, which is already multiply held by clone). Every other asset in the
+table does not yet exist, which means the bus-factor question for them is
+not yet "is it concentrated" but "has it been created with separation
+built in from the start" — the recommendations throughout this document
+series (§7.3's two-copy key model, §14.3's hardware-key registrar 2FA,
+Model B's account-holder spreading) are written specifically to avoid
+creating new single points of failure at the moment each asset is first
+established, rather than trying to de-concentrate them afterward.

@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-11T04:16:35.035Z",
-  "commit": "5f37f77",
-  "note": "Machine-readable launch status for the Production Launch Gate audit. This is the REAL audited state, computed from src/production-gate.js against the actual committed repository (data/ledger.jsonl, real process.env), not a hard-coded example. See spec/production-launch-gate.md for the full narrative and the G1-G14 decision table.",
+  "generated_at": "2026-09-11T08:10:24.656Z",
+  "commit": "b28b4e0",
+  "note": "Machine-readable launch status, updated by the External Infrastructure Closure phase (G7/G8/G9/G3). This is the REAL audited state, computed from src/production-gate.js against the actual committed repository (data/ledger.jsonl, real process.env), not a hard-coded example. No gate was marked PASS merely because more documentation now exists -- see spec/production-launch-gate.md and spec/external-infrastructure-closure.md for the full narrative and the Final Closure Table.",
 
   "overall_launch_status": "NOT_READY",
 
@@ -58,6 +58,19 @@
     "privacy": "public_only"
   },
 
+  "external_infrastructure_closure": {
+    "recommended_domain": "transition-ignition-id.org",
+    "domain_available_as_of_check": true,
+    "fallback_domain": "tii-id.org",
+    "fallback_conditional_on": "unperformed trademark/confusion clearance search",
+    "recommended_registrar": "Cloudflare Registrar",
+    "iana_registry_status": "CLEAR (tii absent -- re-checked live this phase)",
+    "iana_draft_completeness": "COMPLETE on technical fields; INCOMPLETE on governance fields (Contact, Change Controller, Specification URL)",
+    "key_custody_model": "two-copy: operational (encrypted file or OS secret store) + offline backup, different account/vendor from each other; no production key generated",
+    "governance_models_presented": ["Model A: individual Change Controller", "Model B: organization Change Controller, P/A Institute as operating name if legally accurate"],
+    "governance_model_chosen": null
+  },
+
   "identifiers": {
     "total": 1,
     "list": [
@@ -80,11 +93,30 @@
     "failing": 0
   },
 
+  "final_closure_table": [
+    { "gate": "G3", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": ["F", "H"], "external_action_required": false, "blocker": "no production key exists", "next_irreversible_action": "generate the production key per the documented ceremony" },
+    { "gate": "G7", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": ["A", "B", "G"], "external_action_required": true, "blocker": "no domain purchased", "next_irreversible_action": "register transition-ignition-id.org via Cloudflare Registrar" },
+    { "gate": "G8", "status": "UNRESOLVED", "technical_work_complete": false, "human_decision_required": ["C", "D"], "external_action_required": false, "blocker": "legal entity identity and IANA contact both genuinely unknown to this task", "next_irreversible_action": "a human states the legal/individual identity" },
+    { "gate": "G9", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": ["I"], "external_action_required": true, "blocker": "3 governance-dependent fields open (Contact, Change Controller, Spec URL)", "next_irreversible_action": "submit the provisional registration once G7/G8 resolve" }
+  ],
+
+  "human_decisions_required": {
+    "A": "Approve final permanent domain",
+    "B": "Approve registrar",
+    "C": "Provide/approve legal or individual Change Controller identity",
+    "D": "Provide/approve named IANA Contact",
+    "E": "Approve role email arrangement",
+    "F": "Approve production key-custody model",
+    "G": "Authorize domain registration",
+    "H": "Authorize production key generation",
+    "I": "Authorize IANA submission"
+  },
+
   "blockers_remaining": [
     "G8 governance: legal entity status for the current steward is unresolved; a named, accountable IANA contact has not been established. Do not guess.",
-    "G7 resolver: no domain purchased. Primary candidate (transition-ignition-id.org) available as of a live re-check; secondary (tii-id.org) available but conditional on an unperformed trademark clearance search.",
-    "G9 IANA: registration not submitted (this is acceptable pending G8; the registry itself is confirmed clear of 'tii' as of a live re-check).",
-    "G3 key custody: no production signing key has been generated, backed up, or distributed to accountable custodians yet -- the procedure is documented and the code path is ready, but the key does not exist.",
+    "G7 resolver: no domain purchased. Primary candidate (transition-ignition-id.org) confirmed available as of a live re-check this phase (RDAP, method validated against iana.org as a live control); secondary (tii-id.org) also confirmed available but conditional on an unperformed trademark clearance search.",
+    "G9 IANA: registration not submitted (acceptable pending G8; the registry itself reconfirmed clear of 'tii' this phase, live).",
+    "G3 key custody: no production signing key has been generated, backed up, or distributed to accountable custodians yet -- the two-copy model, generation ceremony, and key-loss model are all documented and the code path is ready, but the key does not exist.",
     "G13 release artifacts: complete as of this task, but not yet reviewed/accepted by the steward as final -- labeled 'TII 1.0 Production Candidate', not final.",
     "TII_PRODUCTION_ISSUANCE_ENABLED is not set to 'true' anywhere in the committed configuration, and no override was made by this task."
   ],
@@ -95,8 +127,10 @@
     "canonical_ledger_rewritten": false,
     "domain_purchased_without_authorization": false,
     "dns_changed_without_authorization": false,
+    "role_mailbox_created": false,
     "iana_submission_occurred_without_authorization": false,
     "permanent_legal_governance_claim_invented": false,
+    "production_private_key_generated": false,
     "production_private_key_committed": false,
     "external_witness_falsely_claimed": false,
     "production_issuance_disabled": true

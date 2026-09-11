@@ -156,3 +156,130 @@ existence.** TII 1.0's checkpoints provide **signed-head authenticity**,
 not **independent temporal anchoring** — see
 `spec/phase1-adversarial-verification.md` §1's three-property
 classification, restated in `spec/production-launch-gate.md` §15.
+
+---
+
+## 7. External Infrastructure Closure — G3 (2026-09-11)
+
+### 7.1 Storage options compared
+
+| Option | Confidentiality | Recoverability | Portability | Vendor dependence | Automated-signing compatibility | Operator complexity | Accidental Git-inclusion risk |
+|---|---|---|---|---|---|---|---|
+| **A. Encrypted offline file** (e.g. age/GPG-encrypted PEM on a disconnected machine) | High, if the passphrase/recipient key is itself well-custodied | Manual — someone must decrypt and load it | High — plain file, no vendor format | None | Requires a manual/scripted decrypt-and-load step for the checkpoint process | Low | Low, if kept outside any repo working directory by convention (already enforced by `.gitignore` for anything that DOES end up near the repo — see §3 above) |
+| **B. Encrypted removable/offline backup** (USB/paper, encrypted) | High | Physical retrieval required — intentionally slow | High | None | Not directly automatable (by design — this is the *recovery* copy, not the operational one) | Low–moderate (physical custody discipline) | None (never touches a working directory) |
+| **C. OS/platform secret store** (macOS Keychain, systemd-creds, cloud provider's encrypted env-var store) | Depends on the platform's own protections | Good if the platform account survives; poor if it doesn't | Low–moderate — often platform-specific | Moderate–high | Good — most support direct env-var injection, matching `TII_CHECKPOINT_PRIVATE_KEY` | Low | Low |
+| **D. Managed KMS/HSM** (cloud KMS, hardware HSM) | Highest — key material may never leave the device | Depends entirely on the vendor's own recovery/export policy (some HSMs deliberately make export impossible, which is a *different* risk — see below) | Low — vendor-specific integration | High | Requires an HSM-aware signing integration; `crypto.sign()` in `src/checkpoint.js` currently takes a PEM private key directly, not an HSM handle — **would require a code change not made in this task** | Moderate–high | None |
+
+### 7.2 Recommendation for current scale
+
+**Option A (operational) + Option B (offline recovery), i.e. the two-copy
+model already described in §3 above, is recommended for initial
+production.** Option D (managed KMS/HSM) is explicitly **not required
+merely for appearance** — at TII's current scale (a single authoritative
+writer, checkpoint-per-mutation policy already bounding the exposure
+window per `spec/checkpoint-operation.md`), an HSM adds vendor dependence
+and a code-integration requirement this task does not make, without a
+correspondingly large reduction in real risk. Option C (platform secret
+store) is a reasonable choice for the *operational* copy specifically if
+the production host's platform offers one with good recoverability
+properties — it is not a substitute for an independent offline backup
+(Option B), which must never live in the same account or vendor as the
+operational copy (§3 step 3, restated below).
+
+### 7.3 Recommended initial key model (confirmed, two-copy)
+
+```
+Operational signing copy   -> Option A or C, reachable only by the
+                               authoritative checkpoint process
+                               (TII_CHECKPOINT_PRIVATE_KEY_FILE or
+                               TII_CHECKPOINT_PRIVATE_KEY)
+Offline recovery copy      -> Option B, encrypted, held by a DIFFERENT
+                               person/account than the operational copy,
+                               in a DIFFERENT vendor/service than wherever
+                               the operational copy or the domain/registrar
+                               credentials live (see the bus-factor audit,
+                               spec/succession-manifest.md §Bus-Factor, for
+                               why "different vendor" specifically matters)
+Public verification key    -> published openly (checkpoints/keyset.json,
+                               and eventually the specification site)
+```
+
+**Do not store the only private-key copy on the production server.** (The
+operational copy IS on/reachable-by the production server by necessity —
+"only copy" is the violation, not "a copy exists there.") **Do not store
+the only backup in the same cloud account as the operational copy or as
+the domain/registrar account** — a single compromised account must not be
+able to reach both the operational key and its own backup, or the
+"backup" provides no real protection against exactly the account-level
+compromise it exists to survive.
+
+### 7.4 Key-generation ceremony — restated precisely (still not executed)
+
+1. Clean, disconnected-from-production environment (ideally offline).
+2. `crypto.generateKeyPairSync('ed25519')` — Ed25519, no alternative
+   algorithm.
+3. Derive the key identifier: `keyId()` (`src/checkpoint.js`) — first 16
+   hex chars of SHA-256 over the public key's SPKI DER encoding.
+4. Encrypt the private key material for storage (Option A/B/C per §7.2).
+5. Write the offline backup copy (Option B) to physically/logically
+   separate storage from the operational copy.
+6. Export and publish the public key (`recordPublicKeyInKeyset()`,
+   automatic on first `createCheckpoint()` call — or manually via `tii
+   checkpoint keygen`'s `public_key_file` output).
+7. **Verification test:** `crypto.verify()` round-trip against a test
+   payload — confirms the exported public key actually matches the
+   private key before relying on either copy.
+8. **Checkpoint test:** create one checkpoint against a **disposable, non-
+   canonical test ledger** (never `data/ledger.jsonl`) and verify it —
+   confirms the full `src/checkpoint-store.js` path works end to end with
+   this specific key before it is ever used for anything real.
+9. **Destroy every temporary plaintext copy** — any unencrypted PEM that
+   existed transiently during generation/encryption (shell history,
+   temp files, clipboard) — before the ceremony is considered complete.
+10. **Custody record:** who generated it, when, where the operational and
+    backup copies live (by reference/description, never the key material
+    itself), and who holds access to each — feeds
+    `spec/succession-manifest.md`'s bus-factor audit.
+
+**Not executed for a production key by this task.**
+
+### 7.5 Key-loss model (loss, not compromise — a different scenario from §6 above)
+
+Modeled: the active operational private key is destroyed (device failure,
+accidental deletion) with no compromise suspected.
+
+| Property | Result |
+|---|---|
+| Ledger remains readable | **Yes** — `Ledger.load()`/`verify()` never touch key material |
+| Old checkpoints remain verifiable | **Yes** — `verifySignedCheckpoint()` needs only the (already-public) public key and keyset, never the private key |
+| New checkpoint creation stops | **Yes** — `checkpointStore.resolveSigningKey()` returns `null`, `createCheckpoint()` throws `NoSigningKeyError`, fails closed (unchanged, verified: `test/checkpoint-store.test.js` test D) |
+| Production mutation gate fails closed | **Yes** — `signing_ready: false` blocks `src/production-gate.js`'s AND gate immediately; `checkpoint_current` also becomes unsatisfiable with no key (verified: `test/production-gate.test.js` §7 "flag true but signing key unavailable") |
+| Recovery from backup is possible if backup exists | **Yes** — restore the offline copy (§7.3) as the new operational copy; no ledger or checkpoint state needs to change |
+| If no backup exists | A **new key must be generated** (§7.4) and is a **different key** — the old key's `key_id` stops signing new checkpoints. This requires an explicit governance/key-transition record (a recorded event, e.g. under the same `stewardship.transferred`-style discipline as `spec/succession-policy.md` §3, or a dedicated key-transition note) — **never a silent, unannounced switch.** Every checkpoint signed by the lost key remains verifiable (the keyset entry is never deleted, only ever marked revoked/superseded); only the ABILITY to sign NEW checkpoints with that specific key is gone. |
+
+**No code in this repository silently generates a replacement signing
+authority.** `resolveSigningKey()` returns `null`, never a freshly minted
+key, when nothing is configured (unchanged since production-hardening
+Phase 1, reconfirmed by code inspection this phase).
+
+### 7.6 Signing-failure production policy — re-tested this phase
+
+Re-ran `test/production-gate.test.js`'s "§17 if checkpoint creation fails
+after a committed production mutation..." test in this phase's session
+(unchanged from the prior phase, still passing): a committed production
+mutation is never rolled back; checkpoint state is surfaced as `FAILED`,
+never hidden; further production mutations are blocked via the
+`checkpoint_current` gate condition; operator recovery (re-running
+`checkpointStore.createCheckpoint()`) restores availability without
+touching already-written history. **Policy frozen, unchanged, reconfirmed
+working.**
+
+### 7.7 G3 status
+
+**CONDITIONAL PASS**, unchanged from the prior phase. The custody model,
+storage-option comparison, generation ceremony, key-loss model, and
+signing-failure policy are now all fully specified and (where testable
+without a real key) verified. **No production key exists.** G3 becomes
+PASS only once a real key is generated per §7.4, stored per §7.3, and its
+custody record is entered into `spec/succession-manifest.md` — none of
+which this task performs.

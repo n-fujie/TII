@@ -227,3 +227,95 @@ explicit UNRESOLVED status of those decisions. The registry MUST be
 re-checked again, a final time, immediately before actual submission (should
 that ever be separately authorized) and again immediately before any first
 production issuance, per the original launch gate above.
+
+---
+
+## External Infrastructure Closure — G9 (2026-09-11, same day)
+
+### Fresh IANA re-check (independent of the check above, same session)
+
+Re-queried the IANA *URI Schemes* registry again, independently. Result
+unchanged: **`tii` does not appear as registered, provisional, or
+historical.** Neighboring entries by name: `tip` (Permanent), `tn3270`
+(Permanent), `tool` (Provisional), `tttps` (Provisional) — none is a
+collision. **No STOP condition triggered. G9 does not become FAIL.**
+
+### Draft completeness — every TECH field resolved
+
+All fields marked **[TECH — ready]** in this document (Scheme name,
+Status, Applications/protocols, Scheme syntax, Scheme semantics, Encoding
+considerations, Fragment handling, Interoperability considerations,
+Resolution behaviour, Security considerations, Examples) are complete and
+unchanged — they were already resolved from the frozen TII Identifier
+Syntax 1.0 (`spec/identifier-syntax-1.0-candidate.md`, frozen in the prior
+Production Launch Gate phase). **Only genuine human/governance fields
+remain open**, per this phase's instruction to leave only those:
+
+| Field | Status |
+|---|---|
+| Contact (named person) | **OPEN — `spec/governance-finalization.md` §6, REQUIRED BEFORE IANA** |
+| Contact (role address) | **OPEN — depends on the approved domain, `spec/resolver-domain-decision.md` §14** |
+| Change Controller | **OPEN — `spec/governance-finalization.md` §3/§6, Model A or B not yet chosen** |
+| Specification URL | **OPEN — depends on the approved domain; see "IANA specification URL" below** |
+
+### IANA specification URL
+
+The eventual Reference in this registration must point to the stable
+specification at the approved permanent domain — conceptually
+`https://<domain>/spec`, or a stable version-specific URL if a future
+specification-versioning scheme supports one
+(`spec/identifier-syntax-1.0-candidate.md` §19 already documents the
+versioning discipline this would follow).
+
+**`tiiarchive.vercel.app` MUST NOT be used as the permanent IANA
+specification identity** — it is explicitly non-canonical deployment
+infrastructure (`spec/resolver-domain-decision.md` §7), and using it here
+would exactly repeat the domain-as-identity conflation this entire
+specification series exists to prevent.
+
+**Until the permanent domain is registered, G9's Specification URL field
+stays OPEN and G9 stays CONDITIONAL PASS** — not PASS, per this phase's
+explicit instruction not to mark G9 PASS until the `tii` scheme actually
+appears in the IANA registry under the intended registration (which, by
+definition, has not happened, since nothing has been submitted).
+
+### Registration type — restated
+
+This remains a request for **Provisional** registration only
+(`Status: Provisional` above). **No claim is made, or will be made, that
+Provisional status means globally endorsed, nor that an unsubmitted draft
+reserves the scheme.** Until the IANA registry actually contains a `tii`
+entry, `tii` is **not** globally reserved by this project — anyone else
+remains free to request it, which is exactly why the re-check above is
+performed immediately before every launch-relevant decision, not once and
+assumed stable.
+
+### IANA submission authorization packet
+
+```
+Scheme:                       tii
+Registration type:            Provisional
+
+Contact:                      MISSING (spec/governance-finalization.md §6)
+Change Controller:            MISSING (spec/governance-finalization.md §3/§6)
+Specification URL:            MISSING (depends on spec/resolver-domain-decision.md §14)
+
+Official registry check:      CLEAR (re-confirmed 2026-09-11, this session)
+Draft completeness:           INCOMPLETE (3 governance fields outstanding — technical fields COMPLETE)
+
+ACTION REQUIRING HUMAN AUTHORIZATION:
+SUBMIT / DO NOT SUBMIT
+```
+
+**Not submitted. Draft completeness is INCOMPLETE on governance fields —
+submission should not be authorized until those three fields read a
+resolved value, not MISSING, regardless of any other launch pressure.**
+
+### G9 status
+
+**CONDITIONAL PASS** (unchanged from the prior phase) — technical
+readiness complete and reconfirmed; registry reconfirmed clear; governance
+fields and the specification URL remain open pending G7/G8. **Does not
+become PASS in this phase** — PASS requires the `tii` scheme to actually
+appear in the IANA registry under the intended registration, which by
+definition has not occurred.
