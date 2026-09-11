@@ -238,13 +238,112 @@ agent proposing them, before being treated as decided. C and E remain the
 two fields no one — human or agent — has supplied a value for yet, and
 remain the actual blocker for G8 either way.
 
+## Final Approval Capture (2026-09-11) — supersedes prior status where noted, history preserved above
+
+The human operator completed the "TII FINAL HUMAN DECISIONS" sheet. Recorded
+below exactly as supplied — no inferred fields, no auto-filled values.
+
+```
+A. Permanent domain
+   Value:  transition-ignition-id.org
+   State:  APPROVED
+
+B. Public steward
+   Value:  P/A Institute (as current public specification steward)
+   State:  APPROVED
+
+C. Legal / accountable name
+   Value:  [not supplied -- placeholder returned unfilled]
+   State:  UNRESOLVED
+
+D. Relationship to P/A Institute
+   Value:  "Individual operating publicly as P/A Institute" offered
+           conditionally ("if factually accurate"), not asserted as fact
+   State:  UNRESOLVED -- depends on C; no unconditional confirmation given
+
+E. IANA named contact
+   Value:  [not supplied -- placeholder returned unfilled]
+   State:  UNRESOLVED
+
+F. IANA Change Controller
+   Model:  Individual
+   Model state:  APPROVED
+   Exact Change Controller name:  [not supplied -- placeholder returned unfilled]
+   Name state:  UNRESOLVED
+
+G. Production signing-key custody
+   Value:  two-copy model (operational + offline recovery + published public key; Ed25519; RFC 8785 JCS)
+   State:  APPROVED
+
+H. Registrar
+   Value:  Cloudflare Registrar
+   State:  APPROVED
+
+I. Domain registration authorization
+   State:  AUTHORIZED (applies only to transition-ignition-id.org, per A)
+
+J. Production signing-key generation authorization
+   State:  NOT AUTHORIZED (explicitly deferred)
+
+K. Future IANA Provisional submission authorization
+   State:  AUTHORIZED, CONDITIONAL -- blocked pending C, E, F's exact name,
+           domain registration (I, not yet executed), a stable
+           specification URL, and role email; also requires one fresh
+           IANA registry re-check immediately before submission
+
+L. Production issuance
+   State:  DISABLED (unchanged; not addressed by this sheet)
+```
+
+### Consistency check (per the governing rule: recommendation ≠ approval ≠ authorization ≠ execution)
+
+- **A approved + I authorized:** the domain selection is resolved and its
+  registration is authorized — but **registration has not been executed**.
+  This task performed no external action (§8 below).
+- **G approved + J not authorized:** the custody *model* is resolved;
+  actual key *generation* remains unauthorized and deferred, exactly as
+  the governing rule's own worked example describes.
+- **K authorized + C/E/F-name unresolved:** the submission authorization
+  is real but inert — IANA submission remains blocked until those fields
+  resolve, regardless of K's YES.
+- **F model approved + exact name unresolved:** confirms G8 stays
+  UNRESOLVED — approving *which kind* of Change Controller does not supply
+  *who* it is.
+
+### Gate status (re-derived from the above, no gate re-audited)
+
+| Gate | Status | Why |
+|---|---|---|
+| **G3** Production key custody | **CONDITIONAL PASS** | Custody model now formally APPROVED (new since the last closure phase); no key exists — generation explicitly not authorized |
+| **G7** Permanent resolver | **CONDITIONAL PASS** | Domain and registrar now both APPROVED and registration AUTHORIZED (new); domain is not yet actually registered — nothing executed this task |
+| **G8** Governance | **UNRESOLVED** | C, E, and F's exact Change Controller name remain unsupplied; B and F's model are approved but do not resolve the identity question |
+| **G9** IANA | **CONDITIONAL PASS** | Submission conditionally AUTHORIZED (new) but blocked on G8, G7's actual registration, and the not-yet-existing spec URL/role email |
+
+**Production issuance: DISABLED.**
+
+### Execution plan (NOT performed in this task — listed only, per the decision → authorization → execution separation)
+
+Now that I is AUTHORIZED, the following becomes executable **in a future,
+separately instructed task**, by whoever has the actual registrar/IANA/
+key-generation access this agent does not have:
+
+1. Register `transition-ignition-id.org` via Cloudflare Registrar (I —
+   AUTHORIZED). Requires a human with a Cloudflare account and payment
+   method; this agent has neither.
+2. Nothing else is currently executable: J (key generation) is NOT
+   authorized: no action follows. K (IANA submission) is AUTHORIZED only
+   conditionally and none of its stated prerequisites are met yet, so no
+   submission action follows from this decision sheet either — resolving
+   C/E/F's exact name (a separate human input, not an executable action)
+   and then completing step 1 above are necessary before K's authorization
+   becomes actionable.
+
 ## Confirmation
 
-No external action was taken in producing this sheet or its correction: no
-domain was purchased, no DNS was changed, no role mailbox was created, no
-IANA submission was sent, no production private key was generated, and no
-production TII was issued. The external-infrastructure closure audit was
-not re-run and no external re-checks (RDAP, IANA registry) were performed
-— this sheet reuses the findings already recorded in
-`spec/external-infrastructure-closure.md`. Production issuance remains
-**DISABLED**.
+This task performed **none** of the following: domain registration, DNS
+modification, mailbox creation, production key generation, IANA
+submission, production TII issuance, test-identifier promotion, or
+canonical-ledger mutation. No prior audit was re-run and no external
+re-checks (RDAP, IANA registry) were performed — this capture reuses the
+findings already recorded in `spec/external-infrastructure-closure.md`.
+Production issuance remains **DISABLED**.
