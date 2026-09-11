@@ -465,6 +465,147 @@ not yet.
 
 ---
 
+## Production-Hardening Phase 1 — Before → Repair → After
+
+Appended 2026-09-11. **Everything above this section is the original audit,
+unchanged** — nothing above was edited, softened, or reworded to improve a
+score. This section records what changed since, capability by capability,
+for the items this phase's task explicitly scoped (P0-A/B/C, P1). See
+[production-hardening-phase1.md](production-hardening-phase1.md) for the
+full report and [capability-matrix.json](capability-matrix.json)'s
+`phase1_production_hardening_update` block for the machine-readable version.
+
+### §24 Candidate signed checkpoints
+- **Before:** `CANDIDATE ONLY`. `src/candidate/checkpoint.js` +
+  `src/candidate/jcs.js` existed and passed 13 isolated checks but were
+  "imported by nothing in the running system." No live path signed anything.
+- **Repair:** Both modules were promoted (`git mv`) to `src/checkpoint.js` /
+  `src/jcs.js` and wired into a new live operational layer,
+  `src/checkpoint-store.js`, itself wired into `bin/tii.js checkpoint
+  create/verify/list/keygen`, `GET /status`, `GET /checkpoint/verify`,
+  `GET /checkpoint/list`, `GET /audit`, and an auto-checkpoint-on-write hook
+  in `src/server.js`. See [checkpoint-operation.md](checkpoint-operation.md).
+- **After:** `PASS (A — live core)`, conditional on an operator configuring
+  a signing key. With no key configured, checkpoint *creation* fails closed
+  (`NoSigningKeyError`) — reads and chain-integrity verification are
+  unaffected. `src/candidate/README.md` now documents only
+  `identifier.js` as remaining unwired candidate code.
+
+### §26 Full-chain regeneration attack
+- **Before:** `FAIL`. "verify() cannot distinguish forged from legit... a
+  candidate signed checkpoint DOES detect it (true)" — but that candidate
+  code was not live, so in practice nothing detected it.
+- **Repair:** Checkpoints are now live (§24, above). A **permanent
+  regression test**, `test/checkpoint-store.test.js` test C, forges a full
+  chain and asserts both halves of the claim: `Ledger.verify().ok === true`
+  (claim A still can't see it — this has NOT changed and is not claimed to
+  have changed) AND `verifyCheckpoint(...).matches_current_head === false`
+  against a legitimately-signed checkpoint of the real head (claim B catches
+  it). This test is required to remain in the suite permanently.
+- **After:** Still `FAIL` for claim A alone — this is correct and expected;
+  claim A was never meant to catch this. Now `PASS (A — live core)` for the
+  *combined* claim A+B posture, **conditional on an operator actually
+  configuring a signing key and retaining a checkpoint from before any
+  forgery** (a checkpoint published only after an attacker's rewrite
+  would attest to the forged head, not the real one — see
+  [checkpoint-operation.md](checkpoint-operation.md) §What this does not
+  claim). Without a configured key, the system is exactly as exposed to
+  this attack as before.
+
+### §21 (in part) — `GET/POST /admin/hash-file` arbitrary-file-read
+- **Before:** Listed as a limitation under §21 PASS and again in
+  `spec/security-test-results.md` item 4: "an unauthenticated
+  arbitrary-file-read primitive if the writable server is exposed without a
+  token... HIGH if the writable admin server is ever public." Root cause:
+  `authorized()` returned `true` when no token was configured.
+- **Repair:** `authorized()` now returns `false` unconditionally when
+  `TII_ADMIN_TOKEN` is unset — NO ADMIN TOKEN = ADMIN DISABLED, no
+  anonymous fallback in either direction. Separately, even *with* a token
+  configured, `hash-file` no longer accepts an arbitrary absolute server
+  path: it requires `TII_ADMIN_HASH_DIR` to be explicitly configured and
+  rejects any path (absolute, or relative-with-traversal) that resolves
+  outside it. See
+  [production-hardening-phase1.md](production-hardening-phase1.md) §Admin
+  fail-closed.
+- **After:** The HIGH-severity finding is closed. Verified by
+  `test/admin-security.test.js` (6 tests): no-token → disabled, wrong-token
+  → denied, correct-token → allowed, token never in any response, token
+  never in the ledger, absolute-path and path-traversal rejected, and a
+  static deployment exposes zero admin mutation capability.
+
+### §27 Crash consistency
+- **Before:** `PARTIAL`. "A partial/interrupted final write makes the
+  ENTIRE ledger fail to load... until the line is manually removed. No
+  fsync, no atomic rename, no journaling, no tail recovery... no
+  idempotency key, dedup, or request-id."
+- **Repair:** Write-ahead journal + double fsync (journal, then ledger) per
+  append; explicit, non-silent recovery detection and commands (`tii
+  recover inspect/truncate-tail/commit-journal/discard-journal`); an
+  idempotency-key mechanism for both `issueTII` and `append`. See
+  [crash-recovery.md](crash-recovery.md).
+- **After:** Still `PARTIAL` — this phase does not claim crash consistency
+  is now unconditionally solved. What changed: a truncated/malformed tail
+  no longer makes the whole ledger unparseable-and-stuck — it's detected,
+  the valid prefix still loads read-only, and an explicit, backed-up,
+  operator-invoked repair path exists. Retried writes with the same
+  idempotency key no longer silently double-record. **New, honestly
+  disclosed cost:** append throughput dropped from ~7,800–9,800/s to ~98/s
+  (~10.2 ms/append) due to the two fsync calls — see §Cost in
+  [crash-recovery.md](crash-recovery.md) and the `phase1_production_hardening_update`
+  entry in `capability-matrix.json`. This is a genuine regression in raw
+  throughput, traded deliberately for crash safety, not an oversight.
+
+### §28 Concurrency — multiple OS processes writing one ledger.jsonl
+- **Before:** `FAIL`. "The JSONL ledger is SINGLE-WRITER ONLY... [concurrent
+  processes] produce duplicate seq numbers, broken prev_hash links, corrupt
+  lines, lost updates, verify() failure."
+- **Repair:** TII 1.0 now formally adopts and *implements* a
+  single-authoritative-writer model: cross-process advisory locking
+  (`src/writer-lock.js`, `O_EXCL`-based, with stale-lock reclaim and bounded
+  retry) plus an in-lock in-memory resync fix for a subtler bug found during
+  this phase's own testing (a lock alone does not prevent a writer from
+  computing conflicting event fields from a stale in-memory snapshot — see
+  [single-writer-model.md](single-writer-model.md) §Mechanism: in-process
+  resync). This is explicitly **not** multi-writer distributed issuance —
+  concurrent independent writers are refused, not merged.
+- **After:** Re-run of the same shape of test (`test/writer-lock.test.js`,
+  "§20/§26 CONCURRENCY REGRESSION" — 12 processes × 10 appends, required to
+  remain permanently in the suite) now shows `verify().ok === true`, **zero**
+  duplicate `seq`, **zero** chain breaks, and every one of the 120 attempts
+  accounted for as either committed or cleanly refused
+  (`WriterLockedError`). Status changes from `FAIL` to `PASS (A — live core)`
+  **for the single-writer model specifically** — multi-writer distributed
+  concurrency remains unimplemented and out of scope, and this is stated
+  explicitly rather than implied to be solved.
+
+### §40 Privacy boundary
+- **Before:** `NOT IMPLEMENTED`. "Anything written to an event is public...
+  This is an OPEN PRODUCTION ISSUE by design (the model is specified but not
+  built)."
+- **Repair:** No privacy mechanism was built this phase (explicitly out of
+  scope — "Do NOT implement a private-data subsystem in this phase"). What
+  changed is that TII 1.0 now makes an explicit, narrow **scope claim**
+  instead of an implicit gap: "public-registry-only," documented
+  normatively in [public-only-1.0.md](public-only-1.0.md), with a visible
+  PUBLIC RECORD warning on every admin/write UI surface.
+- **After:** Still `NOT IMPLEMENTED` — this finding is not closed and is not
+  claimed to be closed. What changed is honesty about scope: TII 1.0 no
+  longer implicitly invites the assumption that private/restricted material
+  might be safe to record "eventually" without saying so; it states plainly
+  that this version is public-only and lists what a future
+  restricted-disclosure mechanism would require without building any of it.
+
+### Unchanged by this phase (stated explicitly, not silently implied)
+§22 candidate 26-char identifier remains `CANDIDATE ONLY`, still unwired.
+§17 stewardship transfer workflow remains `PARTIAL` (spec-only procedure).
+§30/§31 scale/large-payload characteristics are unchanged — this phase did
+not touch the in-memory, full-scan architecture; the append-path fsync cost
+above is additive to, not a replacement for, those limits. §34/§35 domain
+and full-operator-loss findings are unchanged — no domain was purchased and
+no governance/succession mechanism was implemented this phase.
+
+---
+
 ## Artifacts
 
 | File | Contents |

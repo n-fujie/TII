@@ -209,10 +209,8 @@ test('no hosting-provider hostname can appear in a canonical identifier', () => 
 });
 
 test('the candidate module uses only CSPRNG — no Math.random anywhere', () => {
-  for (const f of ['identifier.js', 'checkpoint.js']) {
-    const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'candidate', f), 'utf8');
-    assert.ok(!/Math\.random/.test(src), `${f} must not reference Math.random`);
-  }
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'candidate', 'identifier.js'), 'utf8');
+  assert.ok(!/Math\.random/.test(src), 'identifier.js must not reference Math.random');
 });
 
 test('spec/test-vectors.json matches the reference implementation', () => {

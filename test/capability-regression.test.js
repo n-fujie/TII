@@ -167,15 +167,24 @@ test('§26 KNOWN NEGATIVE — verify() alone CANNOT detect a fully-recomputed fo
   assert.notEqual(fv.head_hash, legitHead, 'the forged head differs — only an external checkpoint over legitHead would catch this');
 });
 
-test('§27 KNOWN NEGATIVE — a partial final line makes the whole ledger fail to load', () => {
+test('§27 FIXED (production-hardening Phase 1, P0-C) — a partial final line no longer crashes load(); it is reported as recovery-required, valid prefix stays readable', () => {
   const l = fresh();
   const { tii } = l.issueTII({ recorder: R('t') });
-  l.append({ tii, event_type: 'note.added', recorder: R('t'), content: { i: 1 } });
+  const good = l.append({ tii, event_type: 'note.added', recorder: R('t'), content: { i: 1 } });
   fs.appendFileSync(l.file, '{"event_id":"evt_partial","seq":2,"recorded');
-  assert.throws(() => new Ledger(l.file).load(), /JSON/);
+  const reloaded = new Ledger(l.file).load(); // BEFORE this phase: this line threw
+  assert.equal(reloaded.recovery.required, true);
+  assert.equal(reloaded.recovery.malformedTail.line_number, 3);
+  assert.equal(reloaded.events.length, 2, 'the valid prefix (issue + good append) is still readable');
+  assert.equal(reloaded.getEvent(good.event_id).hash, good.hash, 'valid history is untouched');
+  assert.throws(
+    () => reloaded.append({ tii, event_type: 'note.added', recorder: R('t'), content: {} }),
+    (e) => e.code === 'recovery-required',
+    'writes refuse while recovery is required — see spec/crash-recovery.md'
+  );
 });
 
-test('§27 KNOWN NEGATIVE — identical requests double-record (no idempotency)', () => {
+test('§27 KNOWN LIMITATION (unchanged by design) — identical requests WITHOUT an idempotency key still double-record', () => {
   const l = fresh();
   const { tii } = l.issueTII({ recorder: R('t') });
   const body = { tii, event_type: 'note.added', recorder: R('t'), content: { module: 'note', ref: 'dup', text: 'same' } };
@@ -183,6 +192,29 @@ test('§27 KNOWN NEGATIVE — identical requests double-record (no idempotency)'
   const b = l.append({ ...body });
   assert.notEqual(a.event_id, b.event_id);
   assert.equal(l.forTII(tii).filter((e) => (e.content || {}).ref === 'dup').length, 2);
+});
+
+test('§27 FIXED (P0-C, §25 of the hardening phase) — the SAME idempotency_key makes a retried append a no-op replay', () => {
+  const l = fresh();
+  const { tii } = l.issueTII({ recorder: R('t') });
+  const body = { tii, event_type: 'note.added', recorder: R('t'), idempotency_key: 'req-42', content: { module: 'note', ref: 'dup2', text: 'same' } };
+  const a = l.append({ ...body });
+  const b = l.append({ ...body }); // simulated client retry after a lost response
+  assert.equal(a.event_id, b.event_id, 'the retry returns the original event, not a new one');
+  assert.equal(l.forTII(tii).filter((e) => (e.content || {}).ref === 'dup2').length, 1);
+
+  // same key, different operation -> conflict, not a silent merge
+  assert.throws(
+    () => l.append({ tii, event_type: 'note.added', recorder: R('t'), idempotency_key: 'req-42', content: { module: 'note', ref: 'dup2', text: 'DIFFERENT' } }),
+    /idempotency_key/
+  );
+
+  // issuance idempotency: a retried issueTII with the same key does not mint a second TII
+  const first = l.issueTII({ recorder: R('t'), idempotency_key: 'issue-1' });
+  const second = l.issueTII({ recorder: R('t'), idempotency_key: 'issue-1' });
+  assert.equal(first.tii, second.tii);
+  assert.equal(second.idempotent_replay, true);
+  assert.equal(l.listTIIs().length, 2, 'only tii + the two issueTII-idempotent attempts => exactly one new TII, not two');
 });
 
 test('§40 KNOWN NEGATIVE — "restricted" content is published on every surface', () => {

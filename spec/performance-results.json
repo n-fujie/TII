@@ -122,5 +122,23 @@
   "interpretation": {
     "large_payload": "append/verify scale linearly with payload size. The whole event (incl. a 10 MB inline blob) is one JSONL line held in memory and re-serialized on every export/verify. rebuild-static writes the blob into the per-TII .json and .html. Practical inline limit: the HTTP body cap is 5 MB (src/server.js); the CLI has no cap. Large evidence SHOULD be referenced by content_verification hash + an address, not stored inline.",
     "scale": "All operations are O(events). verify() re-hashes every event on every call and on every rebuild-static. registry render calls project() once per TII. rebuild-static writes 2 HTML + 1 JSON per TII per language (~4 files/TII) plus 3 ledger dumps. No index, no pagination, no incremental build. Everything is in memory (Ledger.events holds all events). Startup re-parses the whole file."
+  },
+  "phase1_production_hardening_update": {
+    "generated_at": "2026-09-11T00:00:00.000Z",
+    "note": "Everything above this key is the original pre-Phase-1 measurement, unchanged. This key records the honest after-Phase-1 append cost, measured on the same hardware (Apple M1, darwin arm64).",
+    "append_before_phase1": {
+      "source": "scale[1] above (1000 TIIs / 5000 events)",
+      "append_per_sec": 9798,
+      "mechanism": "single fs.appendFileSync, no fsync, no lock, no journal"
+    },
+    "append_after_phase1": {
+      "measured_n": 200,
+      "total_ms": 2043,
+      "per_append_ms": 10.215,
+      "appends_per_sec": 98,
+      "mechanism": "write-ahead journal write + fsync, cross-process writer lock acquire, in-lock resync check, ledger append + fsync, journal unlink - see spec/crash-recovery.md",
+      "dominant_cost": "the two fsync calls (journal, then ledger), confirmed by isolating the resync-check cost separately - the resync optimization (Ledger._resyncIfChanged) is working correctly in the common single-process case and is not the source of the slowdown"
+    },
+    "interpretation": "A ~100x reduction in raw append throughput (9,798/s to 98/s), traded deliberately for the property that an interrupted append can no longer silently produce an accepted, corrupted canonical ledger. This is disclosed honestly per this phase's explicit instruction not to make TII appear stronger than it is. Read-path performance (verify, project, export, registry render, rebuild-static) is unaffected by this phase and unchanged from the numbers above."
   }
 }

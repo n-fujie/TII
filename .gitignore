@@ -4,3 +4,10 @@ public/
 *.log
 .DS_Store
 .vercel
+
+# Phase 1 production-hardening: operational state, never committed.
+# checkpoints/ and any signing-key material must never enter git history.
+checkpoints/
+*.private.pem
+*.lock
+*.journal

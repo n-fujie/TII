@@ -384,5 +384,67 @@
       "archChange": true,
       "launchDep": true
     }
-  ]
+  ],
+  "phase1_production_hardening_update": {
+    "generated_at": "2026-09-11T00:00:00.000Z",
+    "note": "Appended by production-hardening Phase 1. The 'capabilities' array above is UNCHANGED from the original audit run — nothing above was edited or reworded. This block records before/repair/after for the specific items this phase touched (P0-A/B/C, P1); see spec/production-hardening-phase1.md for the full report and spec/capability-boundary-audit.md for the prose version of this same update.",
+    "updates": [
+      {
+        "capability_ref": "§24 Candidate signed checkpoints",
+        "before_status": "CANDIDATE ONLY",
+        "after_status": "PASS (A - live core), conditional on a configured signing key",
+        "repair": "src/candidate/checkpoint.js + src/candidate/jcs.js promoted to src/checkpoint.js + src/jcs.js; wired into src/checkpoint-store.js, bin/tii.js checkpoint create/verify/list/keygen, GET /status, GET /checkpoint/verify, GET /checkpoint/list, GET /audit, and an auto-checkpoint-on-write hook in src/server.js.",
+        "still_true": "With no signing key configured (TII_CHECKPOINT_PRIVATE_KEY / _FILE unset), checkpoint creation fails closed (NoSigningKeyError) and no checkpoint is produced. Reads are unaffected."
+      },
+      {
+        "capability_ref": "§26 Full-chain regeneration attack",
+        "before_status": "FAIL",
+        "after_status": "FAIL unchanged for claim A alone (by design); PASS for the combined claim A+B posture, conditional on a signing key being configured before the forgery occurs",
+        "repair": "Live checkpoints (see §24 above). Permanent regression test test/checkpoint-store.test.js test C forges a full chain and asserts verify().ok===true (claim A still fooled) AND verifyCheckpoint(...).matches_current_head===false against a legitimately pre-signed checkpoint (claim B catches it). Required to remain permanently in the suite.",
+        "still_true": "Without a configured signing key, or if the attacker's rewrite happens before any checkpoint was ever created, this attack is exactly as undetectable as before. A checkpoint only protects against forgery of history that predates it."
+      },
+      {
+        "capability_ref": "§21 admin hash-file arbitrary-file-read (sub-finding, HIGH)",
+        "before_status": "open when TII_ADMIN_TOKEN unset (authorized() returned true with no token)",
+        "after_status": "closed",
+        "repair": "authorized() in src/server.js now returns false unconditionally when TII_ADMIN_TOKEN is unset (NO ADMIN TOKEN = ADMIN DISABLED). Independently, hash-file now requires an operator-configured TII_ADMIN_HASH_DIR and rejects any path resolving outside it (resolveSafeHashPath()), even with a valid token.",
+        "still_true": "n/a - this sub-finding is fully closed. Verified by test/admin-security.test.js (6 tests)."
+      },
+      {
+        "capability_ref": "§27 Crash consistency",
+        "before_status": "PARTIAL",
+        "after_status": "PARTIAL (unchanged status; underlying failure mode repaired, new documented cost)",
+        "repair": "Write-ahead journal (<ledger>.journal) + double fsync per append (journal, then ledger); explicit non-silent recovery detection (Ledger.load uses parseLedgerTolerant, sets recovery.required, stops writable mode); operator-invoked recovery commands (tii recover inspect/truncate-tail/commit-journal/discard-journal); idempotency-key mechanism for issueTII and append.",
+        "still_true": "A truncated/malformed tail still requires explicit operator action to repair (by design - never auto-healed). New cost: append throughput dropped from ~7,800-9,800/s to ~98/s (~10.2ms/append, measured on this hardware) due to the two fsync calls per append - this is a deliberate, disclosed tradeoff, not an oversight."
+      },
+      {
+        "capability_ref": "§28 Concurrency - multiple OS processes writing one ledger.jsonl",
+        "before_status": "FAIL",
+        "after_status": "PASS (A - live core) for the single-writer model specifically",
+        "repair": "Cross-process advisory locking (src/writer-lock.js, O_EXCL-based, stale-lock reclaim, bounded retry) plus a resync-under-lock fix (Ledger._resyncIfChanged) for a bug found during this phase's own testing: a lock alone does not stop a writer computing conflicting event fields from a stale in-memory snapshot.",
+        "still_true": "Multi-writer DISTRIBUTED issuance (multiple independent authoritative writers, e.g. across hosts) is explicitly NOT implemented and out of scope for this phase. TII 1.0 uses a single-authoritative-writer model; a second writer process refuses mutation and fails closed rather than merging.",
+        "regression_test": "test/writer-lock.test.js §20/§26 CONCURRENCY REGRESSION - 12 processes x 10 appends: verify().ok===true, 0 duplicate seq, 0 chain breaks, all 120 attempts accounted for as committed or cleanly refused. Required to remain permanently in the suite."
+      },
+      {
+        "capability_ref": "§40 Privacy boundary",
+        "before_status": "NOT IMPLEMENTED",
+        "after_status": "NOT IMPLEMENTED (unchanged; scope now stated explicitly rather than left implicit)",
+        "repair": "No privacy mechanism was built (explicitly out of scope this phase). spec/public-only-1.0.md adds a normative public-registry-only statement and a PUBLIC RECORD warning banner on every admin/write UI surface.",
+        "still_true": "Every field of every event remains public on every output surface. This finding is not closed and is not claimed to be closed."
+      }
+    ],
+    "unchanged_this_phase": [
+      "§22 candidate 26-char identifier - still CANDIDATE ONLY, still unwired",
+      "§17 stewardship transfer workflow - still PARTIAL (spec-only procedure)",
+      "§30/§31 scale and large-payload architecture - untouched; the fsync cost above is additive to these limits, not a replacement",
+      "§34/§35 domain loss / complete operator loss - unchanged; no domain purchased, no governance/succession mechanism implemented"
+    ],
+    "test_suite": {
+      "before_phase1": 120,
+      "after_phase1": 144,
+      "new_tests_added": 24,
+      "breakdown": "6 admin-security, 5 writer-lock, 5 crash-recovery, 7 checkpoint-store, +1 net from a pre-existing candidate-identifier test updated for the src/candidate/ to src/ file move",
+      "pre_existing_tests_modified_assertions": 0
+    }
+  }
 }

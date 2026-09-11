@@ -1,30 +1,45 @@
 'use strict';
 
 /**
- * CANDIDATE signed-checkpoint design — NOT WIRED IN.
+ * LIVE — signed-checkpoint cryptographic core (production-hardening Phase 1,
+ * spec/checkpoint-operation.md). Promoted from src/candidate/checkpoint.js
+ * (freeze audit, spec/freeze-audit.md §E) now that it is wired into the
+ * operational path via src/checkpoint-store.js, bin/tii.js, and src/server.js.
  *
- * Supporting code for the freeze audit (spec/freeze-audit.md §E). Not imported
- * by the running system. Provides an append-only-friendly way to prove *who*
- * attested to a ledger head, without a blockchain.
+ * This module is pure cryptography: build / sign / verify / (de)serialize one
+ * checkpoint object. It has no opinion about files, directories, or keys —
+ * that operational layer is src/checkpoint-store.js. It never issues a TII and
+ * is not part of identifier syntax (the candidate 26-char generator in
+ * src/candidate/identifier.js remains separately unwired — see §36 of the
+ * hardening phase: production issuance stays disabled).
  *
- *   ledger events → SHA-256 chain → periodic checkpoint → Ed25519 signature
- *   → signed checkpoint published as ordinary files in independent locations
+ *   ledger events → SHA-256 chain (unchanged, src/ledger.js) → periodic
+ *   checkpoint → Ed25519 signature → signed checkpoint published as ordinary
+ *   files in independent locations (src/checkpoint-store.js, checkpoints/)
  *
  * Ed25519 via node:crypto (RFC 8032). No third-party crypto, no invented
- * algorithm.
+ * algorithm, no blockchain.
  *
  * CANONICALIZATION — normative rule:
  *   checkpoint signing input = UTF-8 bytes of the RFC 8785 (JSON Canonicalization
  *   Scheme, JCS) canonicalization of the checkpoint JSON object.
  * This is deliberately SEPARATE from the historical ledger hash-chain
- * canonicalization (src/canonical.js), which is unchanged and not migrated.
+ * canonicalization (src/canonical.js), which is UNCHANGED and NOT migrated.
  * JCS gives property-order, whitespace and representation independence and
  * rejects duplicate property names — the properties a cross-implementation
  * verifier needs. Rendered HTML is never signed.
+ *
+ * TWO DISTINCT CLAIMS (never collapse these — spec/checkpoint-operation.md §1):
+ *   A. Ledger chain integrity  — Ledger.verify(): internally self-consistent.
+ *   B. Signed checkpoint       — verifySignedCheckpoint(): a specific head was
+ *      attested to by a specific key at a specific time. (B) is what detects a
+ *      full-chain forgery that (A) alone cannot (see the regression test in
+ *      test/checkpoint.test.js "full-chain forgery is caught by an external
+ *      checkpoint even though Ledger.verify() alone accepts it").
  */
 
 const crypto = require('node:crypto');
-const { stripUndefined } = require('../canonical');
+const { stripUndefined } = require('./canonical');
 const jcs = require('./jcs');
 
 const CHECKPOINT_FORMAT = '1';

@@ -9,7 +9,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const jcs = require('../src/candidate/jcs');
+const jcs = require('../src/jcs');
 
 test('property order independence (RFC 8785 section 3.2.3)', () => {
   const a = { b: 1, a: 2, c: 3 };

@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 
-const cp = require('../src/candidate/checkpoint');
+const cp = require('../src/checkpoint');
 
 function sampleCheckpoint(overrides = {}) {
   return cp.buildCheckpoint({

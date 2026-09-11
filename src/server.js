@@ -3,6 +3,7 @@
 const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const { URL } = require('node:url');
 
 const { Ledger } = require('./ledger');
@@ -12,11 +13,17 @@ const { tiiToFileSlug } = require('./id');
 const { normalizeLang } = require('./i18n');
 const views = require('./views');
 const exporters = require('./export');
+const checkpointStore = require('./checkpoint-store');
+const statusModule = require('./status');
 
 const DATA_FILE = process.env.TII_LEDGER || path.join(__dirname, '..', 'data', 'ledger.jsonl');
 const PORT = Number(process.env.PORT || process.env.TII_PORT || 3009);
 const ADMIN_TOKEN = process.env.TII_ADMIN_TOKEN || '';
 const RESOLVER_BASE = process.env.TII_RESOLVER_BASE_URL || '';
+const CHECKPOINT_DIR = process.env.TII_CHECKPOINT_DIR || path.join(__dirname, '..', 'checkpoints');
+// P0-B: file hashing is restricted to a configured safe directory, or disabled
+// entirely — never an arbitrary server path. See spec/production-hardening-phase1.md §P0-B.
+const ADMIN_HASH_DIR = process.env.TII_ADMIN_HASH_DIR ? path.resolve(process.env.TII_ADMIN_HASH_DIR) : '';
 
 const ledger = new Ledger(DATA_FILE).load();
 
@@ -56,11 +63,27 @@ function parseBody(raw, contentType = '') {
   return out;
 }
 
+/** Constant-time string compare (equal length required; timing-safe otherwise). */
+function constantTimeEqual(a, b) {
+  const ab = Buffer.from(String(a ?? ''), 'utf8');
+  const bb = Buffer.from(String(b ?? ''), 'utf8');
+  if (ab.length !== bb.length) {
+    crypto.timingSafeEqual(ab, ab); // keep timing roughly comparable; length itself is not secret
+    return false;
+  }
+  return crypto.timingSafeEqual(ab, bb);
+}
+
+/**
+ * P0-B — NO ADMIN TOKEN = ADMIN DISABLED. If TII_ADMIN_TOKEN is not
+ * configured, this ALWAYS returns false: there is no anonymous/open fallback.
+ * The token itself is never echoed anywhere in a response.
+ */
 function authorized(req, bodyToken) {
-  if (!ADMIN_TOKEN) return true;
+  if (!ADMIN_TOKEN) return false;
   const header =
     req.headers['x-tii-token'] || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  return header === ADMIN_TOKEN || bodyToken === ADMIN_TOKEN;
+  return constantTimeEqual(header, ADMIN_TOKEN) || constantTimeEqual(bodyToken, ADMIN_TOKEN);
 }
 
 function jsonMaybe(str, fallback) {
@@ -70,6 +93,40 @@ function jsonMaybe(str, fallback) {
     return JSON.parse(str);
   } catch {
     return fallback;
+  }
+}
+
+/** Resolve a path the admin may hash: must stay within ADMIN_HASH_DIR. */
+function resolveSafeHashPath(relPath) {
+  if (!ADMIN_HASH_DIR) throw new Error('file hashing is disabled (TII_ADMIN_HASH_DIR is not configured)');
+  if (!relPath) throw new Error('path is required');
+  if (path.isAbsolute(relPath)) throw new Error('path must be relative to the configured safe directory');
+  const resolved = path.resolve(ADMIN_HASH_DIR, relPath);
+  if (resolved !== ADMIN_HASH_DIR && !resolved.startsWith(ADMIN_HASH_DIR + path.sep)) {
+    throw new Error('path escapes the configured safe directory');
+  }
+  return resolved;
+}
+
+function idempotencyKeyFrom(req, body) {
+  return req.headers['idempotency-key'] || body.idempotency_key || undefined;
+}
+
+/**
+ * Best-effort checkpoint after a successful authoritative write (P0-A chosen
+ * policy — see spec/checkpoint-operation.md §Policy). Never blocks or fails
+ * the mutation: if no signing key is configured this is a silent no-op for
+ * the RESPONSE (the absence is still visible and honest via /status and the
+ * Audit page — "no key configured" is reported there, not hidden). Any
+ * unexpected error is logged, never surfaced to the caller as a write failure.
+ */
+function maybeAutoCheckpoint() {
+  try {
+    if (!checkpointStore.resolveSigningKey()) return null;
+    return checkpointStore.createCheckpoint(ledger, { dir: CHECKPOINT_DIR });
+  } catch (e) {
+    console.error('auto-checkpoint failed (mutation still succeeded):', e.message);
+    return null;
   }
 }
 
@@ -137,6 +194,7 @@ const server = http.createServer(async (req, res) => {
           verification: ledger.verify(),
           generatedAt: new Date().toISOString(),
           exportBase: '/export/ledger',
+          checkpoint: checkpointStore.verifyCheckpoint(ledger, { dir: CHECKPOINT_DIR }),
         })
       );
     }
@@ -147,22 +205,61 @@ const server = http.createServer(async (req, res) => {
       return sendHTML(res, 404, views.resolutionPage({ lang, p: { exists: false, tii: url.searchParams.get('tii') } }));
     }
 
-    /* ---- non-localized: spec.md, health ---- */
+    /* ---- non-localized: spec.md, health, status ---- */
     if (method === 'GET' && parts[0] === 'spec.md') {
       return send(res, 200, exporters.readDoc('SPEC.md'), { 'Content-Type': 'text/markdown; charset=utf-8' });
     }
     if (method === 'GET' && parts[0] === 'healthz') {
       return sendJSON(res, 200, { ok: true, events: ledger.events.length });
     }
+
+    // §35: every operational state reported independently — never one boolean.
+    if (method === 'GET' && parts[0] === 'status' && parts.length === 1) {
+      return sendJSON(
+        res,
+        200,
+        statusModule.getOperationalStatus({
+          ledgerFile: DATA_FILE,
+          checkpointDir: CHECKPOINT_DIR,
+          adminTokenConfigured: !!ADMIN_TOKEN,
+        })
+      );
+    }
+
+    // CLAIM A ONLY: internal chain integrity. Never conflated with claim B.
     if (method === 'GET' && parts[0] === 'verify') {
       const v = ledger.verify();
-      if ((req.headers.accept || '').includes('application/json')) return sendJSON(res, 200, v);
-      return sendHTML(res, 200, views.auditPage({ lang, verification: v, generatedAt: new Date().toISOString(), exportBase: '/export/ledger' }));
+      const body = { claim: 'ledger_chain_integrity', status: v.ok ? 'VALID' : 'INVALID', ...v };
+      if ((req.headers.accept || '').includes('application/json')) return sendJSON(res, 200, body);
+      return sendHTML(
+        res,
+        200,
+        views.auditPage({
+          lang,
+          verification: v,
+          generatedAt: new Date().toISOString(),
+          exportBase: '/export/ledger',
+          checkpoint: checkpointStore.verifyCheckpoint(ledger, { dir: CHECKPOINT_DIR }),
+        })
+      );
+    }
+
+    // CLAIM B ONLY: signed checkpoint. Distinct route, distinct status vocabulary.
+    if (method === 'GET' && parts[0] === 'checkpoint' && parts[1] === 'verify') {
+      const result = checkpointStore.verifyCheckpoint(ledger, { dir: CHECKPOINT_DIR, file: url.searchParams.get('file') || undefined });
+      return sendJSON(res, result.status === 'VERIFIED' ? 200 : 200, result);
+    }
+    if (method === 'GET' && parts[0] === 'checkpoint' && parts[1] === 'list') {
+      return sendJSON(res, 200, checkpointStore.listCheckpoints(CHECKPOINT_DIR));
     }
 
     /* ---- admin ---- */
     if (method === 'GET' && parts[0] === 'admin' && parts.length === 1) {
-      return sendHTML(res, 200, views.adminPage({ tiis: ledger.listTIIs(), tokenRequired: !!ADMIN_TOKEN }));
+      return sendHTML(
+        res,
+        200,
+        views.adminPage({ tiis: ledger.listTIIs(), tokenRequired: !!ADMIN_TOKEN, hashDirConfigured: !!ADMIN_HASH_DIR })
+      );
     }
 
     /* ---- exports ---- */
@@ -184,15 +281,17 @@ const server = http.createServer(async (req, res) => {
     /* ---- API: create TII ---- */
     if (method === 'POST' && parts[0] === 'api' && parts[1] === 'tii' && parts.length === 2) {
       const body = parseBody(await readBody(req), req.headers['content-type']);
-      if (!authorized(req, body.token)) return sendJSON(res, 401, { error: 'unauthorized' });
-      const { tii, event } = ledger.issueTII({
+      if (!authorized(req, body.token)) return sendJSON(res, 401, { error: 'unauthorized', admin_availability: ADMIN_TOKEN ? 'ENABLED' : 'DISABLED' });
+      const { tii, event, idempotent_replay } = ledger.issueTII({
         recorder: body.recorder || 'unspecified',
         content: jsonMaybe(body.content, {}),
         basis: jsonMaybe(body.basis, []),
         external_refs: jsonMaybe(body.external_refs, []),
         content_verification: jsonMaybe(body.content_verification, undefined),
+        idempotency_key: idempotencyKeyFrom(req, body),
       });
-      return sendJSON(res, 201, { tii, event, resolve_url: `/tii/${encodeURIComponent(tii)}` });
+      if (!idempotent_replay) maybeAutoCheckpoint();
+      return sendJSON(res, idempotent_replay ? 200 : 201, { tii, event, idempotent_replay: !!idempotent_replay, resolve_url: `/tii/${encodeURIComponent(tii)}` });
     }
 
     /* ---- API: TII sub-resources ---- */
@@ -202,7 +301,7 @@ const server = http.createServer(async (req, res) => {
 
       if (method === 'POST' && sub === 'events') {
         const body = parseBody(await readBody(req), req.headers['content-type']);
-        if (!authorized(req, body.token)) return sendJSON(res, 401, { error: 'unauthorized' });
+        if (!authorized(req, body.token)) return sendJSON(res, 401, { error: 'unauthorized', admin_availability: ADMIN_TOKEN ? 'ENABLED' : 'DISABLED' });
         const event = ledger.append({
           tii,
           event_type: body.event_type,
@@ -213,7 +312,9 @@ const server = http.createServer(async (req, res) => {
           external_refs: jsonMaybe(body.external_refs, []),
           content_verification: jsonMaybe(body.content_verification, undefined),
           supersedes: body.supersedes || undefined,
+          idempotency_key: idempotencyKeyFrom(req, body),
         });
+        maybeAutoCheckpoint();
         return sendJSON(res, 201, { event });
       }
 
@@ -254,22 +355,33 @@ const server = http.createServer(async (req, res) => {
     /* ---- admin form handlers ---- */
     if (method === 'POST' && parts[0] === 'admin') {
       const body = parseBody(await readBody(req), req.headers['content-type']);
-      if (!authorized(req, body.token))
-        return sendHTML(res, 401, views.messagePage({ title: 'Unauthorized', html: '<p>A write token is required.</p>' }));
+      if (!authorized(req, body.token)) {
+        return sendHTML(
+          res,
+          401,
+          views.messagePage({
+            title: 'Unauthorized',
+            html: `<p>${ADMIN_TOKEN ? 'A valid write token is required.' : 'Admin is disabled — no TII_ADMIN_TOKEN is configured.'}</p>`,
+          })
+        );
+      }
 
       if (parts[1] === 'issue') {
-        const { tii } = ledger.issueTII({
+        const { tii, idempotent_replay } = ledger.issueTII({
           recorder: body.recorder || 'admin',
           content: body.note ? { tracking_started_note: body.note } : {},
+          idempotency_key: body.idempotency_key || undefined,
         });
+        if (!idempotent_replay) maybeAutoCheckpoint();
         return redirect(res, '/tii/' + tiiToFileSlug(tii));
       }
 
       if (parts[1] === 'hash-file') {
         try {
-          const digest = sha256File(body.path);
+          const resolved = resolveSafeHashPath(body.path);
+          const digest = sha256File(resolved);
           const snippet = JSON.stringify(
-            { module: 'content', algo: 'sha256', value: digest, filename: path.basename(body.path) },
+            { module: 'content', algo: 'sha256', value: digest, filename: path.basename(resolved) },
             null,
             2
           );
@@ -278,13 +390,13 @@ const server = http.createServer(async (req, res) => {
             200,
             views.messagePage({
               title: 'SHA-256',
-              html: `<p class="mono">${views.esc(body.path)}</p><pre>${digest}</pre>
+              html: `<p class="mono">${views.esc(path.relative(ADMIN_HASH_DIR, resolved))}</p><pre>${digest}</pre>
 <p>Paste into a <code>content.hash.recorded</code> event:</p><pre>${views.esc(snippet)}</pre>
 <p><a href="/admin">← Admin</a></p>`,
             })
           );
         } catch (e) {
-          return sendHTML(res, 400, views.messagePage({ title: 'Hash failed', html: `<pre>${views.esc(e.message)}</pre>` }));
+          return sendHTML(res, 400, views.messagePage({ title: 'Hash failed', html: `<pre>${views.esc(e.message)}</pre><p><a href="/admin">← Admin</a></p>` }));
         }
       }
 
@@ -299,7 +411,9 @@ const server = http.createServer(async (req, res) => {
             external_refs: jsonMaybe(body.external_refs, []),
             content_verification: jsonMaybe(body.content_verification, undefined),
             supersedes: body.supersedes || undefined,
+            idempotency_key: body.idempotency_key || undefined,
           });
+          maybeAutoCheckpoint();
           return redirect(res, '/tii/' + tiiToFileSlug(event.tii));
         } catch (e) {
           return sendHTML(
@@ -314,7 +428,10 @@ const server = http.createServer(async (req, res) => {
 
     return sendHTML(res, 404, views.notFoundPage({ lang }));
   } catch (err) {
-    return sendJSON(res, 400, { error: err.message });
+    // recovery-required / writer-locked are operational-availability conditions,
+    // not client input errors — 503, and never silently downgraded to a 200.
+    const status = err.code === 'recovery-required' || err.code === 'writer-locked' ? 503 : err.code === 'no-signing-key' ? 409 : 400;
+    return sendJSON(res, status, { error: err.message, code: err.code });
   }
 });
 
@@ -322,8 +439,12 @@ if (require.main === module) {
   server.listen(PORT, () => {
     console.log(`TII listening on http://localhost:${PORT}`);
     console.log(`  ledger: ${DATA_FILE}  (${ledger.events.length} events)`);
-    console.log(`  write token: ${ADMIN_TOKEN ? 'required' : 'not set (single-admin local mode)'}`);
+    console.log(`  write token: ${ADMIN_TOKEN ? 'required (admin enabled)' : 'NOT SET — admin DISABLED (fail closed)'}`);
+    console.log(`  admin hash-file: ${ADMIN_HASH_DIR ? 'enabled, restricted to ' + ADMIN_HASH_DIR : 'disabled'}`);
+    console.log(`  checkpoint signing key: ${checkpointStore.resolveSigningKey() ? 'configured' : 'NOT configured — checkpoint creation will fail closed'}`);
+    console.log(`  checkpoint dir: ${CHECKPOINT_DIR}`);
     console.log(`  resolver base: ${RESOLVER_BASE || '(relative)'}`);
+    console.log(`  production issuance: DISABLED`);
   });
 }
 

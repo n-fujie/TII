@@ -8,19 +8,22 @@ Supporting code for the **production-identifier freeze audit**. Read
   RFC 4648 Base32, unpadded, lowercase, 26 chars. `generateToken` /
   `issueIdentifier`, `parseCanonicalTII` (strict) / `parseTIIReference`
   (RFC 3986: separates a `#fragment`), `canonicalize`, `resolutionUrl`.
-- `jcs.js` — RFC 8785 JSON Canonicalization Scheme: `canonicalize(value)` and a
-  strict `parse(text)` that rejects duplicate property names. Used only as the
-  signed-checkpoint signing input. **Separate from `src/canonical.js`** (the
-  historical ledger hash-chain canonicalization), which is unchanged.
-- `checkpoint.js` — candidate signed-checkpoint design: SHA-256 ledger head
-  bound into a checkpoint, canonicalized with RFC 8785 JCS, signed with Ed25519
-  (`node:crypto`), verifiable from a plain file, with a key-rotation-aware
-  keyset check (`not_before` / `not_after` / `revoked_at`).
 
-**These files are not imported by `src/id.js`, `src/ledger.js`, `src/server.js`,
-`src/export.js`, `src/projection.js`, `src/canonical.js`, or `bin/tii.js`.**
-Issuing a TII still uses the provisional 12-character generator in `src/id.js`,
-and every issued identifier remains `identifier_status: "test"`.
+**Not imported by `src/id.js`, `src/ledger.js`, `src/server.js`, `src/export.js`,
+`src/projection.js`, `src/canonical.js`, or `bin/tii.js`.** Issuing a TII still
+uses the provisional 12-character generator in `src/id.js`, and every issued
+identifier remains `identifier_status: "test"`. Production issuance stays
+**disabled** (see `spec/production-hardening-phase1.md` §36). Wiring this
+generator in requires a separate, explicit launch decision after the permanent
+domain, governance, and IANA registration are settled.
 
-Production issuance stays **disabled**. Nothing in this directory changes that.
-Deleting this directory fully reverts the audit's code footprint.
+## Promoted to live in production-hardening Phase 1
+
+`jcs.js` (RFC 8785 JSON Canonicalization Scheme) and `checkpoint.js` (Ed25519
+signed checkpoints) **used to live here** and are now **`src/jcs.js`** /
+**`src/checkpoint.js`** — live, wired into `src/checkpoint-store.js`,
+`bin/tii.js checkpoint *`, and the Audit page's "Signed checkpoint" section.
+See [`spec/checkpoint-operation.md`](../../spec/checkpoint-operation.md). They
+moved because production hardening's whole point was to connect them to the
+operational path; the identifier profile above was explicitly **not** part of
+that phase and stays candidate-only.

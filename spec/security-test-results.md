@@ -63,3 +63,39 @@ corruption**.
    exposed without a token. HIGH if the writable admin server is ever public.
 5. A very long content string (tested 1 MB) is stored and rendered inline with no size limit
    (the HTTP body cap is 5 MB; the CLI has no cap). See §30.
+
+## Production-Hardening Phase 1 update (appended 2026-09-11)
+
+**Everything above this section is the original audit, unchanged.**
+
+Item 4 above — `GET/POST /admin/hash-file` as an unauthenticated
+arbitrary-file-read primitive when `TII_ADMIN_TOKEN` is unset, rated HIGH —
+is **closed** as of this phase. Two independent fixes:
+
+1. `authorized()` in `src/server.js` now returns `false` unconditionally
+   when no admin token is configured (previously it returned `true` — "open
+   in single-admin mode" is exactly the bug this closes). NO ADMIN TOKEN =
+   ADMIN DISABLED, with no anonymous fallback.
+2. Even with a token configured, `hash-file` no longer accepts an arbitrary
+   server-side path. It requires an operator-configured safe directory
+   (`TII_ADMIN_HASH_DIR`) and rejects any path — absolute, or relative with
+   `..` traversal — that resolves outside it (`resolveSafeHashPath()` in
+   `src/server.js`). With no safe directory configured, hashing is disabled
+   entirely, not merely gated by a token.
+
+New automated coverage: `test/admin-security.test.js` — no-token → admin
+disabled entirely (page shows no forms, all mutation routes return 401);
+wrong token → denied; correct token → allowed; the token never appears in
+any HTML page, JSON response, or ledger/export content; an absolute path and
+a `../`-traversal path are both rejected with `400` and an explicit reason;
+a legitimate relative path within the configured safe directory succeeds;
+and a static-export build contains no admin-named file and no `POST` form
+anywhere in its output.
+
+Full detail: [production-hardening-phase1.md](production-hardening-phase1.md)
+§Admin fail-closed, [checkpoint-operation.md](checkpoint-operation.md) for
+the unrelated but concurrently-added signed-checkpoint mechanism that closes
+the §26-class forgery gap referenced elsewhere in this audit series.
+
+No other item in this document changed. Items 1, 2, 3, and 5 remain exactly
+as found in the original audit and are not addressed by this phase.

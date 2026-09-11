@@ -635,27 +635,63 @@ function docPage({ lang, title, path, markdown }) {
 
 /* --------------------------------------------------------------- audit --- */
 
-function auditPage({ lang, verification, generatedAt, exportBase = '/export/ledger' }) {
+/**
+ * TWO DISTINCT CLAIMS — never collapse into one green "Verified" badge
+ * (production-hardening Phase 1, spec/checkpoint-operation.md §1):
+ *   A. `verification` (Ledger.verify())      — internal chain integrity.
+ *   B. `checkpoint` (checkpoint-store status) — an externally-held signed
+ *      attestation. VERIFIED / UNVERIFIED / MISSING / INVALID — never
+ *      reported as simply "verified" the way (A) is.
+ */
+function auditPage({ lang, verification, generatedAt, exportBase = '/export/ledger', checkpoint }) {
   lang = normalizeLang(lang);
   const L = (k) => t(lang, k);
   const ok = verification && verification.ok;
+
+  const chip = (status) =>
+    `<span class="chip${status === 'VERIFIED' ? '' : status === 'INVALID' ? ' warn' : ''}">${esc(
+      L('checkpoint_status_' + status) || status
+    )}</span>`;
+
+  const checkpointSection = (() => {
+    if (!checkpoint) {
+      return `<p class="muted">${esc(L('checkpoint_status_MISSING'))}</p>`;
+    }
+    const rows = [];
+    rows.push(`<dt>${esc(L('audit_checkpoint_title'))}</dt><dd>${chip(checkpoint.status)}</dd>`);
+    if (checkpoint.checkpoint) {
+      rows.push(`<dt>${esc(L('audit_checkpoint_head'))}</dt><dd class="mono small">${esc(checkpoint.checkpoint.ledger_head_hash)}</dd>`);
+      rows.push(`<dt>${esc(L('audit_checkpoint_created'))}</dt><dd>${esc(checkpoint.checkpoint.created_at)}</dd>`);
+    }
+    if (checkpoint.key_id) rows.push(`<dt>${esc(L('audit_checkpoint_key'))}</dt><dd class="mono small">${esc(checkpoint.key_id)}</dd>`);
+    if (checkpoint.status === 'VERIFIED') {
+      rows.push(`<dt>${esc(L('audit_checkpoint_matches'))}</dt><dd>${checkpoint.matches_current_head ? '✓' : '✗ — ' + esc(checkpoint.note || '')}</dd>`);
+    }
+    if (checkpoint.reason) rows.push(`<dt>${esc(L('audit_checkpoint_reason'))}</dt><dd class="small">${esc(checkpoint.reason)}</dd>`);
+    return `<dl class="kv">${rows.join('')}</dl>`;
+  })();
+
   const body = `
 <h1>${esc(L('audit_title'))}</h1>
 <p class="muted">${esc(L('audit_intro'))}</p>
+<p class="notice">${esc(L('audit_two_claims_note'))}</p>
+
+<h2>${esc(L('audit_integrity'))}</h2>
 <dl class="kv">
 <dt>${esc(L('audit_integrity'))}</dt>
-<dd>${ok ? esc(L('audit_ok')) : `<strong>${esc(L('audit_bad'))}</strong>`}</dd>
+<dd>${ok ? `<span class="chip">${esc(L('audit_ok'))}</span>` : `<span class="chip warn">${esc(L('audit_bad'))}</span>`}</dd>
 <dt>${esc(L('audit_last_verified'))}</dt><dd>${esc(generatedAt || new Date().toISOString())}</dd>
 <dt>${esc(L('audit_recorded_events'))}</dt><dd>${verification ? verification.event_count : '—'}</dd>
 <dt>${esc(L('audit_head_hash'))}</dt><dd class="mono small">${esc(verification ? verification.head_hash : '')}</dd>
 </dl>
-${
-  ok
-    ? ''
-    : `<pre>${esc(JSON.stringify(verification && verification.problems, null, 2))}</pre>`
-}
-<h2>${esc(L('audit_method'))}</h2>
-<p>${esc(L('audit_method_body'))}</p>
+${ok ? '' : `<pre>${esc(JSON.stringify(verification && verification.problems, null, 2))}</pre>`}
+<h3>${esc(L('audit_method'))}</h3>
+<p class="small">${esc(L('audit_method_body'))}</p>
+
+<h2 id="checkpoint">${esc(L('audit_checkpoint_title'))}</h2>
+<p class="muted small">${esc(L('audit_checkpoint_intro'))}</p>
+${checkpointSection}
+
 <h2>${esc(L('audit_exports'))}</h2>
 <ul>
 <li><a href="${exportBase}.jsonl">${esc(L('audit_export_jsonl'))}</a></li>
@@ -683,7 +719,30 @@ function notFoundPage({ lang }) {
 
 /* --------------------------------------------------------------- admin --- */
 
-function adminPage({ tiis = [], tokenRequired }) {
+/**
+ * NO ADMIN TOKEN = ADMIN DISABLED (production-hardening Phase 1, P0-B). When
+ * `enabled` is false this renders NO forms, NO TII listing, and NO quick-fill
+ * catalogue — only the reason and how to enable it. There is no "open by
+ * default" fallback.
+ */
+function adminDisabledPage() {
+  const body = `
+<h1>Admin</h1>
+<div class="notice">
+<strong>Admin is disabled.</strong> No <code>TII_ADMIN_TOKEN</code> is configured.
+No admin token means no admin capability — not open access. Set
+<code>TII_ADMIN_TOKEN</code> to a strong random value in the server environment
+to enable issuance, event append, and file hashing. The token is an
+operational control, not a TII identity property: it is never printed,
+logged, included in exports, or written into any event.
+</div>
+<p class="small"><a href="/status">Operational status</a> · <a href="/audit">Audit</a></p>
+`;
+  return shell({ lang: 'en', title: 'Admin (disabled) — TII', path: '/admin', body, wide: true });
+}
+
+function adminPage({ tiis = [], tokenRequired, hashDirConfigured }) {
+  if (!tokenRequired) return adminDisabledPage();
   const tiiOptions = tiis.map((x) => `<option value="${esc(x)}">`).join('');
   const eventTypeOptions = labels.KNOWN_EVENT_TYPES.map((x) => `<option value="${esc(x)}">`).join('');
   const quick = [
@@ -713,26 +772,40 @@ function adminPage({ tiis = [], tokenRequired }) {
 
   const body = `
 <h1>Admin</h1>
-<p class="muted small">${
-    tokenRequired
-      ? 'Writes require the X-TII-Token header or a token field.'
-      : 'No write token set (single-administrator local mode).'
-  } An issued TII is not deleted; erroneous issuance is handled as a withdrawal / suspension / non-public event. Optional modules are never treated as mandatory ontological fields.</p>
+<div class="notice">
+<strong>PUBLIC RECORD.</strong> Information recorded here may appear in public
+exports, APIs, static mirrors, and archival copies. Do not enter secrets,
+credentials, private personal data, or restricted evidence. TII 1.0 is a
+<strong>public-only</strong> registry — see <a href="/spec">Specification</a>
+and <code>spec/public-only-1.0.md</code>. This is a scope limit, not a privacy
+guarantee: nothing entered here can later be made confidential.
+</div>
+<p class="muted small">Writes require the <code>X-TII-Token</code> header or a
+<code>token</code> field (never logged, never stored in an event, never
+exported). An issued TII is not deleted; erroneous issuance is handled as a
+withdrawal / suspension / non-public event. Optional modules are never treated
+as mandatory ontological fields.</p>
 <div class="grid">
 <div>
 <h2>Issue TII</h2>
 <form method="POST" action="/admin/issue">
 <label>Recorder</label><input name="recorder" required placeholder="admin">
-<label>Token (if required)</label><input name="token">
+<label>Token</label><input name="token" type="password" autocomplete="off">
+<label>Idempotency key (optional)</label><input name="idempotency_key">
 <label>Tracking-started note</label><input name="note">
 <p><button class="btn" type="submit">Issue</button></p>
 </form>
 <h2>Hash a file (SHA-256)</h2>
-<form method="POST" action="/admin/hash-file">
-<label>Path on server</label><input name="path" required placeholder="/path/to/file">
-<label>Token</label><input name="token">
+${
+  hashDirConfigured
+    ? `<form method="POST" action="/admin/hash-file">
+<label>Path, relative to the configured safe directory</label><input name="path" required placeholder="evidence/file.pdf">
+<label>Token</label><input name="token" type="password" autocomplete="off">
 <p><button class="btn" type="submit">Compute</button></p>
 </form>
+<p class="muted small">Restricted to <code>TII_ADMIN_HASH_DIR</code>; paths that escape it are rejected. Not an arbitrary server-file reader.</p>`
+    : `<p class="muted small">Disabled — <code>TII_ADMIN_HASH_DIR</code> is not configured. Set it to a directory to enable hashing files within it (never an arbitrary server path).</p>`
+}
 </div>
 <div>
 <h2>Append event</h2>
@@ -742,7 +815,8 @@ function adminPage({ tiis = [], tokenRequired }) {
 <label>event_type (free string)</label><input name="event_type" list="etypes" required value="record.added">
 <datalist id="etypes">${eventTypeOptions}</datalist>
 <label>Recorder</label><input name="recorder" required placeholder="admin">
-<label>Token</label><input name="token">
+<label>Token</label><input name="token" type="password" autocomplete="off">
+<label>Idempotency key (optional — a retried request with the same key returns the original event instead of duplicating it)</label><input name="idempotency_key">
 <label>content (JSON)</label><textarea name="content">{
   "module": "note",
   "description": "…"
@@ -759,12 +833,15 @@ function adminPage({ tiis = [], tokenRequired }) {
 <h2>Quick fill</h2>
 <div class="table-scroll"><table><thead><tr><th>Action</th><th>event_type</th><th></th></tr></thead><tbody>${quickRows}</tbody></table></div>
 
-<h2>Export &amp; verify</h2>
+<h2>Export, verify &amp; operational status</h2>
 <ul>
 <li><a href="/export/ledger.jsonl">Full ledger (JSON Lines)</a></li>
 <li><a href="/export/ledger.json">Full ledger (JSON)</a></li>
 <li><a href="/export/ledger.csv">Full ledger (CSV)</a></li>
-<li><a href="/verify">Verify hash chain (JSON)</a></li>
+<li><a href="/verify">Ledger chain integrity only (JSON)</a></li>
+<li><a href="/checkpoint/verify">Signed checkpoint status (JSON)</a> · <a href="/checkpoint/list">list</a></li>
+<li><a href="/status">All operational states (JSON)</a></li>
+<li><a href="/audit">Audit page</a></li>
 </ul>
 
 <script>

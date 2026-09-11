@@ -3,10 +3,11 @@
 /**
  * RFC 8785 — JSON Canonicalization Scheme (JCS).
  *
- * CANDIDATE code for the freeze audit. Used ONLY as the signing input for
- * production signed checkpoints (src/candidate/checkpoint.js). It is completely
- * separate from the historical ledger canonicalization in src/canonical.js,
- * which is unchanged and is NOT migrated.
+ * LIVE — promoted from src/candidate/jcs.js in production-hardening Phase 1.
+ * Used ONLY as the signing input for signed checkpoints (src/checkpoint.js,
+ * src/checkpoint-store.js). It is completely separate from the historical
+ * ledger canonicalization in src/canonical.js, which is unchanged and is NOT
+ * migrated. This module has no opinion about TII identifier syntax.
  *
  *   checkpoint signing input = UTF-8 bytes of  canonicalize(checkpoint JSON)
  *

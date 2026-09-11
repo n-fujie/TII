@@ -97,6 +97,21 @@ const STRINGS = {
     audit_export_json: 'Full ledger (JSON)',
     audit_export_csv: 'Full ledger (CSV, one row per event)',
 
+    audit_two_claims_note:
+      'These are two separate claims. Ledger chain integrity means the ledger is internally consistent with its own hashes — it does NOT by itself prove the history was never fully rewritten. A signed checkpoint means a specific ledger head was attested to, at a specific time, by a specific key — held independently of this ledger file.',
+    audit_checkpoint_title: 'Signed checkpoint',
+    audit_checkpoint_intro:
+      'An Ed25519 signature over the ledger head, canonicalized with RFC 8785 (JCS), published as an ordinary file independent of this server. A checkpoint that predates the current head is normal — new events since a checkpoint are not a forgery signal by themselves.',
+    checkpoint_status_VERIFIED: 'Verified',
+    checkpoint_status_UNVERIFIED: 'Unverified (no key available to check it)',
+    checkpoint_status_MISSING: 'Not available',
+    checkpoint_status_INVALID: 'Invalid',
+    audit_checkpoint_head: 'Checkpoint head',
+    audit_checkpoint_created: 'Checkpoint created',
+    audit_checkpoint_key: 'Signing key',
+    audit_checkpoint_matches: 'Matches current ledger head',
+    audit_checkpoint_reason: 'Reason',
+
     about_title: 'About TII',
 
     foot_spec: 'Specification',
@@ -203,6 +218,21 @@ const STRINGS = {
     audit_export_jsonl: '台帳全体 (JSON Lines) — 正本形式',
     audit_export_json: '台帳全体 (JSON)',
     audit_export_csv: '台帳全体 (CSV, 1イベント1行)',
+
+    audit_two_claims_note:
+      'これらは別個の主張です。台帳の整合性は、台帳が自身のハッシュと内部的に矛盾しないことを意味します — それ自体は、履歴が丸ごと書き換えられていないことを証明しません。署名付きチェックポイントは、特定の台帳ヘッドが、特定の時刻に、特定の鍵によって証言されたことを意味します — 本台帳ファイルとは独立に保持されます。',
+    audit_checkpoint_title: '署名付きチェックポイント',
+    audit_checkpoint_intro:
+      '台帳ヘッドに対する Ed25519 署名で、RFC 8785（JCS）で正規化され、本サーバーとは独立した通常のファイルとして公開されます。チェックポイントが現在のヘッドより古いのは正常です — チェックポイント以降の新規イベントはそれ自体では偽造の兆候ではありません。',
+    checkpoint_status_VERIFIED: '検証済み',
+    checkpoint_status_UNVERIFIED: '未検証（検査可能な鍵がありません）',
+    checkpoint_status_MISSING: '利用不可',
+    checkpoint_status_INVALID: '無効',
+    audit_checkpoint_head: 'チェックポイントヘッド',
+    audit_checkpoint_created: 'チェックポイント作成日時',
+    audit_checkpoint_key: '署名鍵',
+    audit_checkpoint_matches: '現在の台帳ヘッドと一致',
+    audit_checkpoint_reason: '理由',
 
     about_title: 'TIIについて',
 
