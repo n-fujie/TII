@@ -534,7 +534,7 @@ non-promotion tests.
 | G5 — Writer safety | **PASS** |
 | G6 — Recovery/idempotency | **PASS** |
 | G7 — Resolver | **CONDITIONAL PASS** |
-| G8 — Governance | **UNRESOLVED** |
+| G8 — Governance | **PASS** *(resolved 2026-09-11 — see the closure note appended at the end of this document)* |
 | G9 — IANA | **CONDITIONAL PASS** |
 | G10 — Public-only policy | **PASS** |
 | G11 — Security | **PASS** |
@@ -544,13 +544,15 @@ non-promotion tests.
 
 ## OVERALL LAUNCH STATUS: **NOT READY**
 
-Production launch requires every gate to read PASS. Five do not: G3 (no
-production key generated yet — procedure ready), G7 (no domain purchased —
-candidates confirmed available today), G8 (governance legal identity
-genuinely unresolved — not guessed), G9 (IANA not submitted, pending
-G7/G8), and G13 (release artifacts complete but pending steward
-acceptance). **There is no automatic launch.** This document prepares TII
-for issuance. It does not authorize it.
+Production launch requires every gate to read PASS. At the time this
+section was originally written, five did not: G3 (no production key
+generated yet — procedure ready), G7 (no domain purchased — candidates
+confirmed available today), G8 (governance legal identity genuinely
+unresolved — not guessed), G9 (IANA not submitted, pending G7/G8), and G13
+(release artifacts complete but pending steward acceptance). **G8 has
+since resolved — see the closure note at the end of this document.** Four
+now do not: G3, G7, G9, G13. **There is still no automatic launch.** This
+document prepares TII for issuance. It does not authorize it.
 
 ---
 
@@ -588,3 +590,40 @@ minting an **"ephemeral generated identifier"** — never described as a
 production TII — with a new regression assertion confirming that
 identifier never appears in the canonical `data/ledger.jsonl`. See
 `external-infrastructure-closure.md` §0.
+
+---
+
+## G8 closure (appended 2026-09-11) — G8: UNRESOLVED → PASS
+
+Through a dedicated human-decision-capture process
+(`spec/human-decisions.md`, `spec/governance-finalization.md` §10), the
+human operator explicitly supplied every field G8 required — none
+inferred, none accepted by silence:
+
+- Legal-identity model: **Model A, individual Change Controller.**
+- Legal/accountable name: **Naoto Fujie.**
+- Relationship to "P/A Institute": **"Naoto Fujie is an individual
+  operating publicly as P/A Institute"** — explicitly confirmed, not the
+  agent's suggested wording accepted by default (it was first offered
+  conditionally, left unresolved for two full exchanges, and only
+  recorded once the operator confirmed it in those exact words).
+- IANA named contact: **Naoto Fujie.**
+- IANA Change Controller: **Naoto Fujie**, per the normative principle
+  (unchanged): a stewardship role, not TII identifier identity,
+  transferable later under the TII Succession Policy.
+
+**G8 — Governance: PASS.** This is a genuine gate resolution, not a
+relaxation of what PASS requires — every field the original audit and
+`spec/governance-finalization.md` marked as blocking is now filled with an
+explicit, human-confirmed value.
+
+**This does not change any other gate, and does not move overall launch
+status off NOT READY.** G3 (no key generated), G7 (domain approved and
+registration authorized, but not yet actually registered), and G9
+(submission conditionally authorized, blocked on the still-unregistered
+domain and the specification URL/role email that depend on it) remain
+CONDITIONAL PASS; G13 remains CONDITIONAL PASS pending steward acceptance.
+**Production issuance remains DISABLED** — G8 resolving authorizes nothing
+by itself; see `spec/human-decisions.md`'s Final Approval Capture for
+exactly what was and was not authorized, and its Execution plan for what
+remains to actually be done, by whom, before any of it happens.

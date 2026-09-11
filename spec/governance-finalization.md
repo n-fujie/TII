@@ -192,8 +192,35 @@ duplicated here):
 
 ## 9. What remains blocking G8
 
-**G8 = UNRESOLVED.** Blocked on: §3's legal-identity model choice (A or
-B) and the specific legal name that follows from it; §6's IANA named
-contact. Neither can responsibly be supplied by this task. See
-`spec/production-launch-gate.md`'s Final Closure Table for the exact
-remaining blocker and next irreversible action.
+**G8 = UNRESOLVED (as of this document's original drafting).** Blocked on:
+§3's legal-identity model choice (A or B) and the specific legal name that
+follows from it; §6's IANA named contact. Neither could responsibly be
+supplied by this task at the time. See §10 below for the resolution.
+
+## 10. Resolution (2026-09-11) — G8 = PASS
+
+Every field §6's human-input form marked "REQUIRED BEFORE IANA" was
+subsequently supplied by explicit human confirmation (not inferred), via
+the decision-capture process recorded in full in `spec/human-decisions.md`:
+
+| Field | Resolved value |
+|---|---|
+| Legal-identity model (§3) | **Model A — individual Change Controller** |
+| Legal/accountable name (§6, row 2) | **Naoto Fujie** |
+| Relationship to "P/A Institute" (§6, row 3) | **"Naoto Fujie is an individual operating publicly as P/A Institute."** — explicitly confirmed wording, not the agent's suggestion accepted by default |
+| IANA named contact (§6, row 4) | **Naoto Fujie** |
+| IANA Change Controller (§6, row 6) | **Naoto Fujie** (Model A) |
+
+Role email (§6, row 5) remains open — it depends on the approved-but-not-
+yet-registered domain (`transition-ignition-id.org`) and is correctly
+sequenced after domain registration, per §7's "once and only once a
+permanent domain is approved" rule; it was never a G8 blocker.
+
+**G8 status: PASS.** §4's normative principle remains exactly as written
+and now has a concrete referent: Naoto Fujie is the current Change
+Controller, a stewardship role, not TII identifier identity, transferable
+later under the TII Succession Policy without changing any issued `tii:`
+identifier. See `spec/production-launch-gate.md`'s Final Closure Table and
+`spec/launch-status.json` for the updated cross-gate picture — G8 resolving
+does not itself change G3/G7/G9 or bring production issuance any closer to
+enabled.

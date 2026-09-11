@@ -390,3 +390,56 @@ remain exactly as recorded in the Final Approval Capture above (no
 external action occurred, so their CONDITIONAL PASS reasoning is
 unaffected by a governance-identity field). Production issuance remains
 **DISABLED**.
+
+## D confirmed — G8 resolved (2026-09-11)
+
+The human operator confirmed D with exact wording, not merely accepting
+the previously-conditional suggestion by default:
+
+```
+D. Relationship to P/A Institute
+   Value:  "Naoto Fujie is an individual operating publicly as P/A Institute."
+   State:  RESOLVED (explicitly confirmed, not inferred)
+```
+
+All four required G8 fields are now resolved:
+
+```
+C. Legal / accountable name        -> Naoto Fujie                                              RESOLVED
+D. Relationship to P/A Institute   -> Individual operating publicly as P/A Institute             RESOLVED
+E. IANA named contact              -> Naoto Fujie                                                RESOLVED
+F. Change Controller (model+name)  -> Individual, Naoto Fujie                                    RESOLVED
+```
+
+### G8 status: PASS
+
+**G8 — Governance: PASS.** Every field
+`spec/governance-finalization.md` §6 marked "REQUIRED BEFORE IANA" is now
+resolved with an explicit human-confirmed value, none inferred. The
+normative principle this project has held throughout remains unchanged and
+now has a concrete referent: Naoto Fujie is the current accountable
+individual and IANA Change Controller; P/A Institute remains the public
+operating name; **this is a stewardship role, not TII identifier
+identity, and may be transferred later under the TII Succession Policy**
+(`spec/succession-policy.md` §3) without changing any issued `tii:`
+identifier.
+
+This status change is also reflected in `spec/launch-status.json`,
+`spec/governance-finalization.md`, and `spec/production-launch-gate.md`
+(each updated by appending this resolution, not rewriting the historical
+UNRESOLVED audit trail that led here).
+
+### Updated overall picture
+
+```
+G3  Production key custody   CONDITIONAL PASS  (model approved; no key generated)
+G7  Permanent resolver        CONDITIONAL PASS  (domain approved + registration authorized; not yet registered)
+G8  Governance                PASS              (this update)
+G9  IANA                      CONDITIONAL PASS  (submission conditionally authorized; domain/spec-URL/role-email prerequisites unmet)
+```
+
+**Production issuance remains DISABLED.** G8 resolving does not authorize,
+execute, or bring forward any external action (domain registration, key
+generation, or IANA submission) — those remain exactly as authorized or
+not authorized in the Final Approval Capture above. No external action was
+taken in producing this update; canonical ledger unchanged.
