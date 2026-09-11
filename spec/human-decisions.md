@@ -187,7 +187,17 @@ model (G) that was just approved:
 This is a security-posture judgment call, not a technical blocker, and it
 belongs to the human operator to make with the above spelled out plainly —
 not something this agent should decide unilaterally in either direction.
-See the question raised alongside this report.
+
+**Resolution:** asked directly; no preference was expressed. Defaulted to
+the conservative option — **key generation deferred, not performed.**
+Nothing is lost by waiting: J's own prerequisites (a domain to eventually
+point a deployed operational copy at, and C/E resolved so the custody
+record in `spec/succession-manifest.md` names a real accountable
+custodian) are not met yet regardless, so there is no immediate target for
+the key even if one were generated now. Revisit once A (domain
+registration) and C/E (governance) are actually resolved, at which point
+the ceremony in `spec/production-key-custody.md` §7.4 has a real
+deployment and a real custodian to record against.
 
 ## Confirmation
 
