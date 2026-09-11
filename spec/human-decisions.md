@@ -199,11 +199,50 @@ registration) and C/E (governance) are actually resolved, at which point
 the ceremony in `spec/production-key-custody.md` §7.4 has a real
 deployment and a real custodian to record against.
 
+## Correction (2026-09-11, supersedes "Answers received" above)
+
+**The "Answers received" section above is corrected, not erased.** The
+human operator clarified that the checked/approved values recorded there
+were this agent's own advisory recommendations, not something the operator
+had actually confirmed — an important distinction this sheet should not
+have blurred. Corrected status, effective now:
+
+```
+A. Permanent domain           -> transition-ignition-id.org   RECOMMENDED / NOT YET APPROVED
+B. Public steward              -> P/A Institute                PROPOSED / NOT YET APPROVED FOR THIS GATE
+C. Legal/accountable name      -> UNRESOLVED (unchanged)
+D. Relationship to P/A Inst.   -> UNRESOLVED, depends on C (unchanged)
+E. IANA named contact          -> UNRESOLVED (unchanged)
+F. Change Controller model     -> Individual                   RECOMMENDED / NOT YET APPROVED
+   Exact Change Controller name -> UNRESOLVED, depends on C
+G. Production key custody      -> two-copy model                RECOMMENDED / NOT YET APPROVED
+H. Registrar                   -> Cloudflare Registrar          RECOMMENDED / NOT YET APPROVED
+I. Domain registration          -> NOT AUTHORIZED
+J. Production key generation    -> NOT AUTHORIZED
+K. Future IANA submission       -> NOT AUTHORIZED
+```
+
+**No practical change results from this correction** — I, J, and K were
+never executed under the earlier reading either (I and K because this
+agent cannot execute them regardless of authorization status; J because it
+was independently deferred after a direct question went unanswered). The
+correction matters for the record, not for anything that needs to be
+undone: **nothing in the repository, any external registrar, any DNS
+zone, IANA, or any signing-key store was ever touched on the strength of
+the earlier "approved" reading**, so there is nothing to roll back.
+
+A, B, F, G, and H remain this agent's standing recommendations (the
+reasoning in "Why each item matters" above is unchanged) — they simply
+require the human operator's own explicit confirmation, distinct from this
+agent proposing them, before being treated as decided. C and E remain the
+two fields no one — human or agent — has supplied a value for yet, and
+remain the actual blocker for G8 either way.
+
 ## Confirmation
 
-No external action was taken in producing this sheet: no domain was
-purchased, no DNS was changed, no role mailbox was created, no IANA
-submission was sent, no production private key was generated, and no
+No external action was taken in producing this sheet or its correction: no
+domain was purchased, no DNS was changed, no role mailbox was created, no
+IANA submission was sent, no production private key was generated, and no
 production TII was issued. The external-infrastructure closure audit was
 not re-run and no external re-checks (RDAP, IANA registry) were performed
 — this sheet reuses the findings already recorded in
