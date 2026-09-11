@@ -110,6 +110,85 @@ one is not approval for another — and **none of them, individually or
 together, enables production TII issuance**, which requires a separate,
 later authorization after a fresh full G1–G14 re-audit.
 
+## Answers received (2026-09-11)
+
+```
+A. Permanent domain           -> transition-ignition-id.org  [RESOLVED]
+B. Public steward              -> P/A Institute, APPROVED     [RESOLVED]
+C. Legal/accountable name      -> NOT PROVIDED                [STILL BLOCKING]
+D. Relationship to P/A Inst.   -> conditional wording only, depends on C [STILL BLOCKING]
+E. IANA named contact          -> NOT PROVIDED                [STILL BLOCKING]
+F. Change Controller model     -> Individual (D1)             [RESOLVED]
+   Exact Change Controller name -> depends on C, not provided [STILL BLOCKING]
+G. Production key custody      -> two-copy model APPROVED     [RESOLVED]
+H. Registrar                   -> Cloudflare Registrar APPROVED [RESOLVED]
+I. Domain registration          -> YES                        [cannot be executed by this agent -- see below]
+J. Production key generation    -> YES                        [environment concern raised -- see below]
+K. Future IANA submission       -> YES, conditional on prerequisites [prerequisites not yet met -- see below]
+```
+
+**C, D, E, and the exact Change Controller name remain the actual blocker
+for G8.** The answer set approved the *model* (an individual, per F) and
+supplied *recommended wording* for D conditional on C being accurate, but
+did not supply the specific legal/accountable name itself — C and E are
+still literally unanswered fields, not filled in with a placeholder value.
+**G8 remains UNRESOLVED** until a real name is given for C (and, normally,
+E is the same person unless stated otherwise).
+
+### I — Domain registration: cannot be executed by this agent
+
+Registering a domain is a real financial transaction against a real
+registrar account. This agent has no registrar account, no payment method
+on file, and no browser session authenticated to Cloudflare (or any
+registrar) — there is nothing here capable of completing a purchase, with
+or without authorization. **This step requires the human operator to
+register `transition-ignition-id.org` directly** (Cloudflare Registrar,
+per H) and then report back the registrar account details relevant to
+`spec/succession-manifest.md` (registrant/controller, 2FA method) so the
+succession documentation can be completed.
+
+### K — Future IANA submission: prerequisites not met, not attempted
+
+K's own text conditions it on "once prerequisites are satisfied" — they
+are not: no domain is registered, C/D/E/exact-Change-Controller-name (G8)
+remain unresolved, and no stable specification URL exists yet (it depends
+on the domain). Separately, this agent has no email-sending capability and
+no IANA web-submission session — even once prerequisites are met, actually
+filing the registration is another step requiring the human operator's own
+action (or a tool this session does not have). **Nothing was submitted.**
+
+### J — Production key generation: proceeding requires one more decision
+
+Unlike I and K, generating an Ed25519 keypair is something this agent
+*can* technically do (`crypto.generateKeyPairSync('ed25519')`, purely
+local, no external service). The concern is not capability — it's whether
+*this specific environment* is the right place to do it, given the custody
+model (G) that was just approved:
+
+- The key-generation ceremony this project already documented
+  (`spec/production-key-custody.md` §7.4) specifies a **clean
+  environment** as step 1. This chat session is a general-purpose coding
+  sandbox with Bash and browser access that has been used for many other
+  things across this conversation — not a dedicated, single-purpose
+  machine.
+- The approved custody model (G) requires an **operational copy** and an
+  **offline recovery copy** held in genuinely separate accounts/locations.
+  From inside this session, the only thing this agent can do is write
+  files to its own sandbox filesystem and hand a copy to the human
+  operator (e.g. via a file send) — it cannot deploy anything to the real
+  production host, and it cannot place a backup anywhere truly
+  independent of "wherever the human operator puts the file they were
+  handed."
+- The private key would necessarily be visible in this agent's working
+  context during generation, which the documented ceremony's "clean
+  environment" step is implicitly trying to avoid for a root-of-trust
+  signing key.
+
+This is a security-posture judgment call, not a technical blocker, and it
+belongs to the human operator to make with the above spelled out plainly —
+not something this agent should decide unilaterally in either direction.
+See the question raised alongside this report.
+
 ## Confirmation
 
 No external action was taken in producing this sheet: no domain was
