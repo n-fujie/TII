@@ -9,7 +9,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const id = require('../src/candidate/identifier');
+const id = require('../src/identifier');
 
 const fixed = (hex) => Buffer.from(hex, 'hex');
 

@@ -286,9 +286,9 @@
     "note": "Changing the resolver base does not change the identifier or the token."
   },
   "example_identifiers_non_normative": [
-    "tii:jsdyo2e3rxur4wvywrm4w2vhha",
-    "tii:6cfkpxkehixbsoj2zsdwcs3sri",
-    "tii:glp6znifssfsovjwxs3epwpjje"
+    "tii:khywqwj7sp42vukh5o5tg2yaaq",
+    "tii:oijkc5avdoxee2jveabcrjajfm",
+    "tii:j62vf5dvg44vum5i7iryrjri4u"
   ],
   "all_rejections_match": true,
   "all_uri_references_match": true,

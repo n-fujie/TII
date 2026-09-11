@@ -272,3 +272,32 @@ or if the steward simply prefers zero abbreviation ambiguity.
 
 **Neither domain is to be registered without explicit authorization.** No domain
 was registered, and no DNS was changed, by this task.
+
+## 13. Production Launch Gate re-check (2026-09-11) — appended, nothing above erased
+
+Re-checked live as launch gate **G7** in `spec/production-launch-gate.md`,
+using the same RDAP method as §2 above, validated against a known-registered
+control domain (`example.org`, which returned live registration data,
+confirming the method distinguishes registered from unregistered correctly):
+
+| Candidate | RDAP result (2026-09-11, this phase) | Available? |
+|---|---|---|
+| `transition-ignition-id.org` | HTTP 404 — no registry object | **Available** |
+| `tii-id.org` | HTTP 404 — no registry object | **Available** |
+
+Both remain available, unchanged from §2/§12 above. This phase's launch-gate
+task framed `transition-ignition-id.org` as the **PRIMARY BRAND-SAFETY
+CANDIDATE** and `tii-id.org` as **SECONDARY** — consistent with, not
+contradicting, §12's PRIMARY/FALLBACK recommendation above: `tii-id.org`'s
+PRIMARY status there was always explicitly conditional on an unperformed
+trademark clearance search (§5), and `transition-ignition-id.org` was
+already identified as having minimal collision exposure. Given that search
+remains unperformed as of this re-check, this document's operative
+recommendation is: **use `transition-ignition-id.org` unless and until a
+trademark clearance search clears `tii-id.org`.**
+
+**Still not registered. No DNS changed. No purchase made or authorized by
+this task.** G7 status in the launch-gate table: **CONDITIONAL PASS** — the
+decision framework and current availability are both confirmed; only an
+explicit purchase authorization (outside this task's authority) and,
+for `tii-id.org` specifically, the trademark clearance search, remain.

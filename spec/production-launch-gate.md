@@ -1,0 +1,551 @@
+# TII Production Launch Gate — Final Pre-Issuance Audit
+
+**Date:** 2026-09-11. **Commit at start of this phase:** `5f37f77`.
+**Question this document answers:** *"Is TII ready to issue its first
+production identifier?"* **Answer: NO.** See §Final Decision Table.
+
+This phase does not redesign any previously established component (thin
+core, optional vocabulary, historical preservation, localization, external
+PID association, portability/reconstruction, single-writer operation,
+crash-safe recovery, fail-closed administration, signed checkpoints, the
+chain-integrity/checkpoint-authenticity separation, public-only scope, or
+the adversarial-verification findings). It wires the previously-candidate
+production identifier profile into a real, multiply-gated, currently-closed
+issuance path, and produces the governance/resolver/IANA/security/
+succession/release documentation a real launch would require — while
+issuing nothing.
+
+## §0 Absolute rule — confirmed held
+
+**No production TII was issued during this task.** No existing test
+identifier was promoted. No 12-character historical identifier became
+production. No externally visible production issuance endpoint was
+enabled (confirmed: `src/server.js` does not import
+`src/production-issuance.js` — `test/production-gate.test.js` "§0 no HTTP
+route exposes production issuance"). The production switch
+(`TII_PRODUCTION_ISSUANCE_ENABLED`) is unset in this repository's committed
+configuration and was never set to `"true"` by any code this task added.
+
+## §1 Baseline snapshot
+
+| Item | Value |
+|---|---|
+| git commit (start of this phase) | `5f37f77` |
+| Full test count (start) | 146 (end of the adversarial-verification phase) — see §49 for the end-of-phase count and exact accounting of the +29 net new/replaced tests |
+| `data/ledger.jsonl` md5 | `fb56b2a4a2f5fe134f3fa23e2186e7d1` |
+| Event count | 10 |
+| Head hash | `eb27a2b7a557465b1301e7225052d03b6fc1550caa7b9ea943e5e90835427e95` |
+| `verify()` | `{ ok: true, problems: [] }` |
+| Existing identifiers | `tii:h4r3jsn4p25d` — the only one |
+| Identifier statuses | `"test"` — the only value present, and the only value any TEST code path (`src/ledger.js` `issueTII()`) can ever write |
+| Checkpoint status | `MISSING` — no checkpoint has ever been created against this ledger |
+| Production issuance status | `DISABLED` |
+| Resolver configuration | `TII_RESOLVER_BASE_URL` unset in the repository; live interim deployment at `tiiarchive.vercel.app` (non-canonical) |
+| IANA registration status | `NOT SUBMITTED`; registry re-confirmed to contain no `tii` entry (live check, 2026-09-11 — see §G9) |
+| Governance placeholders | P/A Institute as *candidate* steward (`spec/governance-candidate.md`) — legal entity identity UNRESOLVED |
+
+All existing identifiers confirmed test-only (`grep -o
+'"identifier_status":"[a-z]*"' data/ledger.jsonl` → `test`, exactly once).
+All destructive/gate testing in this phase used disposable ledgers under
+`os.tmpdir()` (`test/production-gate.test.js`) — the canonical ledger above
+is unchanged after this phase (see §Final Report for the after-value,
+identical to this baseline).
+
+## §G1 — Identifier syntax: frozen
+
+**TII Identifier Syntax 1.0** is frozen (specification level — see
+`spec/identifier-syntax-1.0-candidate.md` Appendix B). Profile, reconfirmed
+unchanged from the freeze-audit candidate:
+
+- `tii:<token>`, token = 128 CSPRNG bits, RFC 4648 Base32, unpadded,
+  lowercase, exactly 26 characters, alphabet `a-z2-7`.
+- No metadata encoded: no issuer/version/date/institution/content-type/
+  state/transition/ignition semantics, no resolver information, no
+  checksum field.
+- Non-canonical Base32 tail rejected; final character restricted to
+  `{a, e, i, m, q, u, y, 4}` (the 128-bit → 26-char zero-pad-tail rule,
+  reconfirmed).
+- No fuzzy substitution (`0→o`, `1→l/i`, `8→b` all hard errors).
+- Uppercase input normalizes to lowercase only via the existing, unchanged
+  canonicalization rule — no new normalization was added.
+
+**Implementation:** `src/identifier.js` (promoted this phase from
+`src/candidate/identifier.js` — see `src/candidate/README.md`).
+**No version, date, or category string ever enters the token** — verified
+structurally (the generator takes no such parameters) and by
+`test/identifier.test.js`'s existing "no semantic metadata" test.
+
+**Freezing this specification is independent of every other gate below** —
+see `identifier-syntax-1.0-candidate.md`'s Appendix B for the explicit
+statement that this freeze alone does not authorize issuance.
+
+**Status: PASS.**
+
+## §G2 — Production issuance isolation: wired, gated OFF
+
+`src/identifier.js` is now connected to a real append path
+(`src/production-issuance.js`), entirely separate from the TEST path
+(`src/ledger.js` `issueTII()`, which always uses `src/id.js`'s 12-character
+generator). **Production issuance MUST remain disabled — and does.**
+
+### The gate (`src/production-gate.js`)
+
+`TII_PRODUCTION_ISSUANCE_ENABLED` — strict-parsed: **only** the exact
+string `"true"` is true; absent, empty, `"false"`, `"1"`, `"TRUE"`,
+whitespace, or any other value is false. This is ANDed with eight further
+independent conditions — no single variable, and no single condition of
+any kind, is ever sufficient alone:
+
+| Condition | What it checks | Inferred from NODE_ENV/hostname/branch/etc.? |
+|---|---|---|
+| `production_requested` | `TII_PRODUCTION_ISSUANCE_ENABLED === "true"` | No |
+| `identifier_profile_frozen` | G1 above (fixed `true` — the spec is frozen) | No |
+| `governance_approved` | `TII_GOVERNANCE_APPROVED === "true"` | No |
+| `resolver_approved` | `TII_RESOLVER_APPROVED === "true"` | No |
+| `iana_gate_satisfied` | `TII_IANA_GATE_SATISFIED === "true"` | No |
+| `signing_ready` | a real, loadable signing key is configured (`checkpointStore.resolveSigningKey()`) | No — presence of a key for OTHER purposes (e.g. TEST checkpointing) does not leak in; this IS the same check, by design, since a key is a key |
+| `writer_healthy` | no stale lock, no recovery-required state (`src/status.js` + `src/recovery.js`) | No |
+| `recovery_clear` | no malformed tail / orphaned journal | No |
+| `checkpoint_current` | the latest checkpoint's attested head matches the ledger's CURRENT head (G4 policy) | No |
+
+`admin_authenticated` is deliberately **not** part of this static
+computation — it is a per-request fact the caller (the CLI, or any future
+HTTP route) must check in addition to, never instead of, everything above.
+
+Verified by `test/production-gate.test.js` (28 tests): every listed
+fail-closed case from the task's §7 (absent/empty/false/malformed flag;
+flag true with any ONE of governance/resolver/IANA/signing/writer/recovery/
+checkpoint-currency unsatisfied) independently blocks; `NODE_ENV=production`,
+`VERCEL=1`, `VERCEL_ENV=production`, and a configured `TII_ADMIN_TOKEN`
+are all confirmed to have **zero effect** on the gate.
+
+### The dry-run mode (`tii issue --production --dry-run`)
+
+Generates a candidate, shows the intended event, reports gate status — and
+is structurally incapable of writing: the dry-run branch never calls
+`ledger.append()` at all. Verified: after a dry-run with the gate
+artificially open (disposable ledger only), `ledger.events.length === 0`
+both in-memory and reloaded fresh from disk.
+
+### Collision handling (§10 of the task)
+
+Generate → encode → optimistic pre-check → attempt append (which
+re-validates uniqueness a second time, **authoritatively, inside the
+writer lock**, via `Ledger._validateAppend()`) → on a genuine collision,
+discard and draw a new candidate; only the surviving candidate is ever
+appended. Deterministically tested by monkey-patching the generator to
+force an exact collision, then verifying: (a) the collided candidate
+appears in the canonical ledger exactly zero or one times — never twice —
+and (b) the retry with a fresh candidate succeeds.
+
+**No production issuance HTTP endpoint exists** (§0's requirement) —
+confirmed structurally (`src/server.js` does not import
+`src/production-issuance.js`) and by test.
+
+**Status: PASS.**
+
+## §G3 — Cryptographic key custody: documented, not executed
+
+Full model: `spec/production-key-custody.md`. Summary: five things kept
+distinct (private key / public key / key id / checkpoint records /
+rotation metadata); private key never committed, never in the ledger,
+never exported, never in the static mirror, never in an API response,
+never rendered, never logged (all previously verified empirically in the
+adversarial-verification phase, re-affirmed here as policy); an explicit
+key-generation, backup, access, publication, rotation, and
+compromise-declaration procedure is documented.
+
+**No production key was generated by this task.** The key-compromise +
+backdating limitation from adversarial verification is preserved verbatim,
+not re-solved (`spec/production-key-custody.md` §6) — no trusted
+timestamping is claimed.
+
+**Status: CONDITIONAL PASS** — the model and procedure are complete and
+correct; the gate itself (`signing_ready`) correctly reports `false` today
+because no key exists. This becomes PASS the moment a real production key
+is generated and configured per the documented procedure — not before.
+
+## §G4 — Signed checkpoint operation: policy frozen
+
+**Chosen policy: A — checkpoint after every authoritative production
+mutation.** (Task §16 explicitly "strongly prefer[s] a policy that
+minimizes unauthenticated history windows" at current scale; policy A
+does that maximally.)
+
+Sequence, implemented in `issueProductionTII()`
+(`src/production-issuance.js`): append (already fsynced by
+`src/ledger.js`) → attempt `checkpointStore.createCheckpoint()`
+immediately → report the outcome in the return value
+(`production_checkpoint: {status: 'CREATED'|'FAILED', ...}`), never
+silently.
+
+**Signing-failure policy (§17), implemented exactly as specified:**
+
+- The mutation is **not hidden** — it stays in canonical history exactly
+  as appended (`do not pretend the write did not happen`).
+- Checkpoint status is surfaced as `FAILED`, not swallowed.
+- **Further production mutations are disabled** until checkpoint currency
+  is restored: `checkpoint_current` (§G2's gate) becomes `false` the
+  moment the ledger head moves past the latest checkpoint's attested head,
+  and stays `false` until a new checkpoint is successfully created —
+  blocking every subsequent `issueProductionTII()` call via the same gate
+  mechanism used for every other precondition. No separate "halt flag" was
+  needed; the checkpoint-currency condition already produces exactly this
+  effect.
+- **History is never rolled back.** Recovery is "create a new checkpoint,"
+  never "undo the append."
+
+Verified end-to-end: `test/production-gate.test.js` "§17 if checkpoint
+creation fails..." — sabotages checkpoint creation for exactly one call,
+confirms the mutation is committed and visible, confirms the *next*
+production issuance attempt is refused by the gate, and confirms operator
+recovery (re-running `checkpointStore.createCheckpoint()`) restores
+availability.
+
+**Status: PASS.**
+
+## §G5 — Authoritative writer: final check
+
+Re-ran the multi-process concurrency suite at 2, 10, and 100 writers
+(reusing the methodology from `spec/phase1-adversarial-verification.md`
+§7, re-confirmed current via the existing permanent regression test,
+`test/writer-lock.test.js` "§20/§26 CONCURRENCY REGRESSION," passing in
+this phase's full suite run). Result, unchanged from the adversarial
+phase: **zero duplicate `seq`, zero broken hash links at every scale**;
+stale in-memory head corruption remains fixed (the resync-under-lock
+mechanism from production-hardening Phase 1); a second writer either waits
+briefly (bounded internal retry) or fails closed
+(`WriterLockedError`/`code: 'writer-locked'`), never merges; reads remain
+available throughout. **No claim of distributed multi-writer support is
+made anywhere** — `spec/single-writer-model.md`'s normative statement is
+unchanged and reconfirmed: TII 1.0 is single-authoritative-writer.
+
+**Status: PASS.**
+
+## §G6 — Recovery and idempotency: final check
+
+Re-confirmed via the existing, still-passing permanent test suites
+(`test/crash-recovery.test.js`, `test/writer-lock.test.js`) and the full
+9-boundary journal crash matrix and 5-type partial-tail-recovery
+diagnostics already established in
+`spec/phase1-adversarial-verification.md` §9/§10 (unchanged this phase —
+"do NOT redesign these components"): valid prefix always survives;
+incomplete writes surface `recovery_required`, never silently accepted;
+malformed tail is reported with exact byte range, never ignored; explicit
+recovery (`tii recover truncate-tail`/`commit-journal`/`discard-journal`)
+always produces a report and always backs up the damaged source first;
+recovery never rewrites a byte of earlier valid history.
+
+**Idempotency**, the mandatory scenario: request with key K → committed →
+simulated crash before response → restart (fresh `Ledger` instance,
+modeling a new process) → retry with the same K → same result returned, no
+duplicate event. Same K with a different payload → explicit conflict, no
+silent merge. State survives restart because it is derived entirely from
+the `idempotency_key` field persisted on every canonical event, not an
+in-memory cache — this was proven in the adversarial-verification phase
+(§8) and is unchanged. `issueProductionTII()` accepts the same
+`idempotency_key` parameter and passes it through unchanged to
+`ledger.append()`, inheriting this property directly rather than
+reimplementing it.
+
+**Status: PASS.**
+
+## §G7 — Permanent resolver domain
+
+**No domain purchased. No DNS changed.** Live RDAP re-check performed
+2026-09-11 (this phase), method validated against a known-registered
+control domain (`example.org`, confirmed to return live registration data
+rather than a 404):
+
+| Candidate | Role (this task's framing) | RDAP result (2026-09-11, this phase) |
+|---|---|---|
+| `transition-ignition-id.org` | **PRIMARY, brand-safety** | HTTP 404 — **available** |
+| `tii-id.org` | SECONDARY | HTTP 404 — **available** |
+
+Both remain available as of today, consistent with — and re-confirming,
+same-day-current — the prior analysis in
+`spec/resolver-domain-decision.md` (which itself carries a full
+pricing/registrar/DNSSEC/collision analysis, unchanged and not
+re-litigated here). `tii-id.org` remains conditional on a trademark/
+confusion-clearance search that has **not** been performed (Technology
+Innovation Institute, `tii.ae`, is the material collision risk). This
+task's framing prefers `transition-ignition-id.org` as primary for exactly
+that reason — it has minimal collision exposure and needs no clearance
+search.
+
+**Neither domain is registered by this task, with or without
+authorization having been sought.**
+
+**Status: CONDITIONAL PASS** — the decision framework is complete, both
+candidates are confirmed currently available, and a clear primary
+recommendation exists; this becomes PASS only once a domain is actually
+purchased and DNS-configured under separate, explicit authorization
+(`spec/resolver-domain-decision.md` §11's operational requirements).
+
+## §G8 — Governance finalization
+
+Required distinctions (`spec/governance-candidate.md`, unchanged this
+phase):
+
+| Field | Status |
+|---|---|
+| Official name | Transition-Ignition Identifier — fixed |
+| Abbreviation | TII (non-exclusive) — fixed |
+| Current specification steward | P/A Institute — **candidate, not finalized** |
+| **Legal entity** (if P/A Institute is not itself a legal entity name) | **UNRESOLVED** |
+| IANA named contact (real accountable person) | **UNRESOLVED — not established by this task** |
+| IANA role address | `standards@<domain>` — depends on G7, not created |
+| Change Controller | P/A Institute, acting as current steward — **candidate, pending approval** |
+| Hosting operator, registrar, signing-key custodian | replaceable operational roles — correctly kept distinct from "owner" (`governance-candidate.md` §0) |
+
+**Per this task's explicit instruction: "If legal status is unresolved: G8
+= UNRESOLVED. Do not guess."** No legal entity name is invented here. No
+named individual is supplied as the IANA contact — doing so would require
+information this task does not have and is not authorized to fabricate.
+The normative wording preserving "change controller is a current
+stewardship role, not identifier identity, transferable under the
+Succession Policy" (`spec/governance-candidate.md` §2) is unchanged and
+reconfirmed correct.
+
+**Status: UNRESOLVED.**
+
+## §G9 — IANA URI scheme status
+
+Immediate, live re-check of the official IANA *URI Schemes* registry
+performed this phase (2026-09-11): **`tii` still does not appear**, as
+registered, provisional, or historical. No STOP condition triggered — see
+`spec/iana-provisional-registration.md`'s "G9 re-check" section for the
+exact result and method.
+
+The RFC 7595 provisional registration draft
+(`spec/iana-provisional-registration.md`) remains submission-ready on its
+technical fields (syntax, encoding, interoperability, security, fragment
+handling, resolution behavior, examples — all frozen per G1) and
+explicitly marked `[GOV — unresolved]` on its governance fields (contact,
+change controller, specification URL), which depend on G7/G8 resolving
+first. **Not submitted. No improvised suffix. No silent scheme change.**
+
+**Status: CONDITIONAL PASS** — technical readiness is complete and the
+registry is confirmed clear; becomes PASS (or the submission actually
+proceeds) only once G7/G8 resolve and an explicit filing decision is made.
+
+## §G10 — Public-only TII 1.0
+
+Unchanged, reconfirmed (`spec/public-only-1.0.md`): TII 1.0 public registry
+MUST NOT be used for secrets, credentials, private personal information,
+embargoed evidence, restricted security information, or material requiring
+confidential disclosure. No privacy functionality is advertised anywhere.
+The PUBLIC RECORD warning banner on the admin/write interface is unchanged
+and still renders (verified by the existing, still-passing
+`test/admin-security.test.js` suite).
+
+**Status: PASS.**
+
+## §G11 — Security: final audit
+
+Re-ran the full known attack suite via the existing, comprehensive
+automated test suite (175/175 passing at the end of this phase — see
+§Test Suite) plus the complete adversarial-verification pass carried
+forward unchanged from the prior phase
+(`spec/phase1-adversarial-verification.md`): admin token
+absent/wrong/correct; path traversal; symlink escape (direct, nested,
+symlinked-directory — D1, fixed with a permanent regression test);
+checkpoint filename traversal (D2, fixed with a permanent regression
+test); malformed checkpoint (JSON-invalid and structurally-invalid, both
+correctly rejected — `test/checkpoint-store.test.js`); arbitrary file-read
+attempts (both the hash-file and checkpoint-verify vectors, both closed);
+HTML/script/SVG injection, `javascript:` URLs, control characters, Unicode
+bidi (`spec/security-test-results.md` — unchanged, no execution path
+found); malformed JSON and duplicate JSON keys (`test/jcs.test.js` — RFC
+8785 §3.1 duplicate-key rejection); oversized requests (5 MB body cap,
+`spec/capability-boundary-audit.md` §30); malformed TII, invalid Base32,
+non-canonical tail (`test/identifier.test.js`); replayed mutation and
+idempotency conflict (§G6 above).
+
+**No known HIGH-severity exploitable issue remains for the intended
+initial deployment model.** The two HIGH/MEDIUM-HIGH issues found during
+the adversarial-verification phase (D1 symlink escape, D2 unauthenticated
+checkpoint-file-param read) are fixed with permanent regression tests, not
+merely noted.
+
+**Status: PASS.**
+
+## §G12 — Reconstruction and succession
+
+Reconstruction from source + canonical export + specification + public
+verification keys + checkpoints, in a fresh environment, demonstrated
+repeatedly and unchanged this phase
+(`spec/capability-boundary-audit.md` §32, `test/capability-regression.test.js`):
+identifiers, complete history, translations, optional modules, and
+external PID relations all survive; static pages rebuild; the original
+Vercel deployment is not required. Checkpoint verification specifically
+was not part of the original §32 demonstration (no checkpoint existed at
+that time) but is independently proven by
+`test/checkpoint-store.test.js`'s create → export the file → verify in a
+completely separate process/directory pattern used throughout that suite.
+
+**Complete-operator-loss drill:** modeled in
+`spec/succession-manifest.md` §10 — reconstructable identity/history is
+kept explicitly separate from lost authority credentials, lost domain
+continuity, and lost signing-key custody; no succession claim is
+overstated.
+
+**Succession manifest** (`spec/succession-manifest.md`, new this phase):
+non-secret, lists specification location, canonical ledger format and
+current state, checkpoint status (none exist), verification key status
+(none exist), resolver dependencies, registrar recovery requirements (not
+applicable — no domain), IANA change-controller procedure, source location,
+and exact rebuild instructions. **No private key material included.**
+
+**Status: PASS.**
+
+## §G13 — Release artifacts
+
+| Artifact | File | Status |
+|---|---|---|
+| TII Identifier Syntax and Resolution Specification 1.0 | `spec/identifier-syntax-1.0-candidate.md` | frozen (Appendix B) |
+| Governance and Succession Policy | `spec/governance-candidate.md`, `spec/succession-policy.md`, `spec/succession-manifest.md` | governance UNRESOLVED at legal-entity level; succession policy/manifest complete |
+| Public-Only Scope Policy | `spec/public-only-1.0.md` | complete |
+| Checkpoint Verification Specification | `spec/checkpoint-operation.md` | complete |
+| Single-Writer Operational Model | `spec/single-writer-model.md` | complete |
+| Crash-Recovery Procedure | `spec/crash-recovery.md` | complete |
+| Security Considerations | `spec/security-test-results.md`, `spec/phase1-adversarial-verification.md`, `spec/iana-provisional-registration.md` §Security | complete |
+| IANA Provisional Registration Draft | `spec/iana-provisional-registration.md` | submission-ready on technical fields; governance fields pending |
+| Machine-readable test vectors | `spec/test-vectors.json` | complete, unchanged |
+| Capability and limitation statement | `spec/capability-boundary-audit.md`, `spec/capability-matrix.json` | complete, continuously appended, not erased |
+
+New this phase: `spec/production-launch-gate.md` (this document),
+`spec/first-production-issuance-procedure.md`,
+`spec/production-key-custody.md`, `spec/production-release-claims.md`,
+`spec/succession-manifest.md`, `spec/launch-status.json`.
+
+**Labeled: "TII 1.0 Production Candidate."** Not labeled final — final
+requires the steward's explicit review and acceptance, which is outside
+this task's authority to grant.
+
+**Status: CONDITIONAL PASS** — every required document exists and is
+internally consistent; "final" acceptance is a steward decision this task
+does not make.
+
+## §G14 — First production issuance procedure
+
+Written in full: `spec/first-production-issuance-procedure.md` — 22 steps,
+preconditions (every gate must read a firm PASS, not CONDITIONAL PASS),
+explicit stop/recovery behavior if checkpoint creation fails at step 17,
+explicit idempotent-retry guidance if the procedure is interrupted, and an
+explicit content-discipline section (§43/§44 — no ontology dump, no
+self-certifying claims) cross-referenced to
+`spec/production-release-claims.md`.
+
+**Not executed. Step 11 onward was not performed.**
+
+**Status: PASS.**
+
+---
+
+## §15 Checkpoint trust layers (restated, unchanged)
+
+Kept distinct throughout this phase, exactly as established by adversarial
+verification and not re-litigated:
+
+1. **Internal chain integrity** — implemented (`Ledger.verify()`).
+2. **Signed checkpoint authenticity** — implemented
+   (`src/checkpoint-store.js`), now with a frozen production policy (§G4).
+3. **Independent external witness / timestamp** — **NOT implemented.**
+   Explicitly optional/future. **Not represented as already available.**
+   `spec/production-key-custody.md` §6 restates the exact backdating
+   limitation this implies and does not claim trusted timestamping or
+   immutable historical existence.
+
+## §31 Fragment rule (regression check)
+
+Reconfirmed correct and unchanged: `tii:<token>#fragment` is a valid URI
+reference (RFC 3986); the fragment is not part of the token, does not
+affect registry lookup, and receives no TII-specific semantics
+(`spec/identifier-syntax-1.0-candidate.md`, `test/identifier.test.js`'s
+fragment-handling test, unchanged and still passing).
+
+## §48 Final performance check
+
+Re-measured this phase (Apple M1, darwin arm64, consistent with prior
+measurements):
+
+- **Single authoritative append (production-path-equivalent, crash-safe):**
+  ~98 appends/sec, ~10.2 ms/append (unchanged from production-hardening
+  Phase 1's measurement — the production path uses the identical
+  `Ledger.append()` machinery, just a different token generator upstream
+  of it; no new performance characteristic was introduced).
+- **Checkpoint generation:** not independently re-timed this phase; no
+  change to `src/checkpoint-store.js`'s implementation in this phase.
+- **Registry resolution, static rebuild, ledger verify, checkpoint
+  verify:** unchanged from `spec/performance-results.json` — no code in
+  the read/render/export paths was touched.
+
+**No optimization performed** — no launch-blocking performance defect was
+observed. **The existing ~100 durable writes/sec scale is accepted as
+entirely acceptable for initial operation**, exactly as anticipated.
+
+## §49 Final test suite
+
+`node --test`: **175/175 passing, 0 failing** at the end of this phase, up
+from 146 at the start (`test/candidate-identifier.test.js`'s 18 tests
+became `test/identifier.test.js`'s 19 — one test replaced by two more
+specific ones reflecting the gated-wiring reality, net +1 — plus 28 new
+tests in `test/production-gate.test.js`: 146 − 18 + 19 + 28 = 175).
+Includes: all legacy tests,
+candidate/production identifier tests (`test/identifier.test.js`,
+renamed and updated in place — no assertion was weakened, two were
+replaced with equivalent-or-stricter versions reflecting the now-accurate
+"this module IS wired, but gated" reality), checkpoint tests, JCS tests,
+admin security tests (including the two new permanent regression tests
+from adversarial verification), writer-lock tests, crash-recovery tests,
+the adversarial-verification-phase security tests (unchanged, carried
+forward), and 28 new production-gate tests (fail-closed matrix, dry-run,
+real gated issuance demonstrated exactly once against a disposable ledger,
+checkpoint policy, collision handling, test/production separation). **No
+pre-existing test was weakened to obtain a green result** — the only test
+behavior changes are in `test/identifier.test.js`'s final two tests, which
+were REPLACED (not weakened) because the fact they tested — "this module
+is not wired anywhere" — became false by explicit design this phase (G2),
+and the replacement tests assert the more specific, still-strict property
+that actually holds now: wired only into the gated production path, never
+into any TEST or public-surface code path.
+
+## §50 No silent migration — confirmed
+
+`tii:h4r3jsn4p25d` remains `identifier_status: "test"` — unchanged,
+unrenamed, unregenerated, never used as, or considered for, the first
+production TII. Confirmed by direct inspection of `data/ledger.jsonl`
+(§Final Report) and by `test/production-gate.test.js`'s explicit
+non-promotion tests.
+
+---
+
+## Final Decision Table
+
+| Gate | Status |
+|---|---|
+| G1 — Identifier syntax | **PASS** |
+| G2 — Production issuance isolation | **PASS** |
+| G3 — Key custody | **CONDITIONAL PASS** |
+| G4 — Signed checkpoints | **PASS** |
+| G5 — Writer safety | **PASS** |
+| G6 — Recovery/idempotency | **PASS** |
+| G7 — Resolver | **CONDITIONAL PASS** |
+| G8 — Governance | **UNRESOLVED** |
+| G9 — IANA | **CONDITIONAL PASS** |
+| G10 — Public-only policy | **PASS** |
+| G11 — Security | **PASS** |
+| G12 — Reconstruction/succession | **PASS** |
+| G13 — Release artifacts | **CONDITIONAL PASS** |
+| G14 — First-issuance procedure | **PASS** |
+
+## OVERALL LAUNCH STATUS: **NOT READY**
+
+Production launch requires every gate to read PASS. Five do not: G3 (no
+production key generated yet — procedure ready), G7 (no domain purchased —
+candidates confirmed available today), G8 (governance legal identity
+genuinely unresolved — not guessed), G9 (IANA not submitted, pending
+G7/G8), and G13 (release artifacts complete but pending steward
+acceptance). **There is no automatic launch.** This document prepares TII
+for issuance. It does not authorize it.

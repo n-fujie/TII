@@ -38,6 +38,33 @@ handling), `jcs.js` (RFC 8785 JSON Canonicalization Scheme), `checkpoint.js`
 (Ed25519 signing over JCS). Tests: `test/candidate-identifier.test.js`,
 `test/candidate-jcs.test.js`, `test/candidate-checkpoint.test.js`.
 
+## Production-hardening Phase 1 + Adversarial Verification + Production Launch Gate
+
+Appended, not a rewrite of the above (which reflects this directory's state
+at the freeze-audit stage). Since then:
+
+| File | Purpose |
+|---|---|
+| [`production-hardening-phase1.md`](production-hardening-phase1.md) | Live signed checkpoints, fail-closed admin, single-writer safety, crash recovery, public-only scope. |
+| [`checkpoint-operation.md`](checkpoint-operation.md) | The two-claims model (chain integrity vs. signed checkpoint), key handling, checkpoint policy. |
+| [`single-writer-model.md`](single-writer-model.md), [`crash-recovery.md`](crash-recovery.md) | The single-authoritative-writer model and the write-ahead-journal crash-safety design. |
+| [`public-only-1.0.md`](public-only-1.0.md) | TII 1.0 is public-registry-only — a scope limit, not a privacy claim. |
+| [`phase1-adversarial-verification.md`](phase1-adversarial-verification.md), [`phase1-failure-matrix.json`](phase1-failure-matrix.json) | Adversarial pass against Phase 1: 2 defects found and fixed (symlink escape, unauthenticated checkpoint-path read), several limitations documented not fixed. |
+| [`production-launch-gate.md`](production-launch-gate.md) | **Final pre-issuance audit.** G1–G14 launch-readiness table. Overall status: **NOT READY**. |
+| [`first-production-issuance-procedure.md`](first-production-issuance-procedure.md) | The 22-step first-issuance procedure. Written, not executed. |
+| [`production-key-custody.md`](production-key-custody.md) | Production signing-key custody model. No key generated. |
+| [`production-release-claims.md`](production-release-claims.md) | Allowed/forbidden public claim language; comparative-claim and regression audits. |
+| [`succession-manifest.md`](succession-manifest.md) | Non-secret succession manifest — current state of every item, honestly, including "does not exist yet." |
+| [`launch-status.json`](launch-status.json) | Machine-readable launch status, computed from the real gate module against the real repository. |
+
+The candidate identifier profile is **no longer only in `src/candidate/`** —
+`identifier.js` (like `jcs.js` and `checkpoint.js` before it in
+production-hardening Phase 1) was promoted to `src/identifier.js` once it
+was wired into a real (gated, closed) path — see
+`src/candidate/README.md`. `src/candidate/` is now empty of source files.
+Tests: `test/identifier.test.js` (renamed from
+`test/candidate-identifier.test.js`), `test/production-gate.test.js` (new).
+
 ### Corrections applied after the first audit round
 
 1. **UUIDv4** is treated as a legitimate RFC 9562 candidate; Candidate A is

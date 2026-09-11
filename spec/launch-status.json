@@ -1,0 +1,104 @@
+{
+  "generated_at": "2026-09-11T04:16:35.035Z",
+  "commit": "5f37f77",
+  "note": "Machine-readable launch status for the Production Launch Gate audit. This is the REAL audited state, computed from src/production-gate.js against the actual committed repository (data/ledger.jsonl, real process.env), not a hard-coded example. See spec/production-launch-gate.md for the full narrative and the G1-G14 decision table.",
+
+  "overall_launch_status": "NOT_READY",
+
+  "production_gate": {
+    "available": false,
+    "conditions": {
+      "production_requested": false,
+      "identifier_profile_frozen": true,
+      "governance_approved": false,
+      "resolver_approved": false,
+      "iana_gate_satisfied": false,
+      "signing_ready": false,
+      "writer_healthy": true,
+      "recovery_clear": true,
+      "checkpoint_current": false
+    },
+    "blocked_by": [
+      "production_requested",
+      "governance_approved",
+      "resolver_approved",
+      "iana_gate_satisfied",
+      "signing_ready",
+      "checkpoint_current"
+    ],
+    "admin_authenticated": "not applicable outside a live request; not evaluated here"
+  },
+
+  "gates": {
+    "G1_identifier_syntax": "PASS",
+    "G2_production_issuance_isolation": "PASS",
+    "G3_key_custody": "CONDITIONAL_PASS",
+    "G4_signed_checkpoints": "PASS",
+    "G5_writer_safety": "PASS",
+    "G6_recovery_idempotency": "PASS",
+    "G7_resolver": "CONDITIONAL_PASS",
+    "G8_governance": "UNRESOLVED",
+    "G9_iana": "CONDITIONAL_PASS",
+    "G10_public_only_policy": "PASS",
+    "G11_security": "PASS",
+    "G12_reconstruction_succession": "PASS",
+    "G13_release_artifacts": "CONDITIONAL_PASS",
+    "G14_first_issuance_procedure": "PASS"
+  },
+
+  "legacy_fields_for_readability": {
+    "production_issuance": "disabled",
+    "identifier_profile": "ready",
+    "resolver": "unresolved",
+    "iana": "not_submitted",
+    "governance": "unresolved",
+    "signing": "not_generated",
+    "writer": "ready",
+    "recovery": "ready",
+    "privacy": "public_only"
+  },
+
+  "identifiers": {
+    "total": 1,
+    "list": [
+      { "tii": "tii:h4r3jsn4p25d", "identifier_status": "test" }
+    ],
+    "production_identifiers_issued": 0
+  },
+
+  "ledger": {
+    "file": "data/ledger.jsonl",
+    "md5": "fb56b2a4a2f5fe134f3fa23e2186e7d1",
+    "event_count": 10,
+    "head_hash": "eb27a2b7a557465b1301e7225052d03b6fc1550caa7b9ea943e5e90835427e95",
+    "verify_ok": true
+  },
+
+  "test_suite": {
+    "total": 175,
+    "passing": 175,
+    "failing": 0
+  },
+
+  "blockers_remaining": [
+    "G8 governance: legal entity status for the current steward is unresolved; a named, accountable IANA contact has not been established. Do not guess.",
+    "G7 resolver: no domain purchased. Primary candidate (transition-ignition-id.org) available as of a live re-check; secondary (tii-id.org) available but conditional on an unperformed trademark clearance search.",
+    "G9 IANA: registration not submitted (this is acceptable pending G8; the registry itself is confirmed clear of 'tii' as of a live re-check).",
+    "G3 key custody: no production signing key has been generated, backed up, or distributed to accountable custodians yet -- the procedure is documented and the code path is ready, but the key does not exist.",
+    "G13 release artifacts: complete as of this task, but not yet reviewed/accepted by the steward as final -- labeled 'TII 1.0 Production Candidate', not final.",
+    "TII_PRODUCTION_ISSUANCE_ENABLED is not set to 'true' anywhere in the committed configuration, and no override was made by this task."
+  ],
+
+  "confirmations": {
+    "no_production_tii_issued": true,
+    "no_test_tii_promoted": true,
+    "canonical_ledger_rewritten": false,
+    "domain_purchased_without_authorization": false,
+    "dns_changed_without_authorization": false,
+    "iana_submission_occurred_without_authorization": false,
+    "permanent_legal_governance_claim_invented": false,
+    "production_private_key_committed": false,
+    "external_witness_falsely_claimed": false,
+    "production_issuance_disabled": true
+  }
+}

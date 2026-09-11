@@ -683,3 +683,29 @@ commit provenance as NOT VERIFIED (not observable from page content alone)
 rather than assumed. Score changes are NOT automatic — see
 `spec/capability-matrix.json`'s `phase1_adversarial_verification_update`
 block for the itemized before/after.
+
+---
+
+## Production Launch Gate (appended 2026-09-11)
+
+**Everything above is unchanged.** The Production Launch Gate phase
+promoted §22/§23's "CANDIDATE ONLY" 26-char production identifier from
+unwired to **gated-capable-but-closed**: it is now reachable through
+`src/production-issuance.js` and `bin/tii.js issue --production`, but every
+call is refused by `src/production-gate.js`'s 9-condition gate, which this
+repository's committed configuration never satisfies (`available: false`
+in this repo, always — verified by a permanent test asserting exactly
+that against the real `data/ledger.jsonl` and real `process.env`). §26's
+"live system publishes no signed checkpoints" finding is also updated: a
+PRODUCTION checkpoint policy (checkpoint after every production mutation,
+fail-visible and mutation-blocking on signing failure) is now frozen and
+implemented — though, as with the identifier profile, it is exercised only
+by the (closed) production path and by tests, not by any active issuance.
+
+Full detail, the complete G1–G14 launch-readiness table (five gates not
+yet PASS: key custody, resolver, governance, IANA, release-artifact
+acceptance), and the overall **NOT READY** determination:
+[production-launch-gate.md](production-launch-gate.md). Machine-readable:
+[launch-status.json](launch-status.json). No production identifier was
+issued; no test identifier was promoted; the canonical ledger is
+byte-for-byte unchanged by this phase.

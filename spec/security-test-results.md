@@ -147,3 +147,20 @@ would require a design/policy decision outside this pass's repair scope) in
 access, and that a backdated checkpoint signed with a compromised
 pre-revocation key is cryptographically indistinguishable from a genuine
 historical one.
+
+## Production Launch Gate re-run (appended 2026-09-11)
+
+Re-ran the complete known attack suite (this document's original 22
+payloads, the Phase-1 admin-fail-closed suite, and the adversarial
+verification's symlink/checkpoint-traversal/collision/idempotency suite)
+against the Production Launch Gate phase's own new code
+(`src/production-gate.js`, `src/production-issuance.js`,
+`bin/tii.js issue --production`) in addition to everything already
+covered. **No new HIGH-severity issue found.** Specific checks relevant to
+the new code: the gate's `strictBool()` parser rejects every malformed
+truthy-looking value (`"1"`, `"TRUE"`, `"yes"`, leading/trailing
+whitespace) rather than accepting any of them (`test/production-gate.test.js`
+§7/§8); no HTTP route imports `src/production-issuance.js` (§0 test);
+`identifier_status` cannot be set to `"production"` through any route in
+`src/server.js` (grepped and asserted by test). Full detail:
+`spec/production-launch-gate.md` §G11. 175/175 tests passing.

@@ -492,5 +492,50 @@
       "after_this_task": 146,
       "new_permanent_regression_tests": 2
     }
+  },
+  "production_launch_gate_update": {
+    "generated_at": "2026-09-11T04:16:35.035Z",
+    "note": "Appended by the Production Launch Gate phase. Nothing above (the original capabilities array, the phase1_production_hardening_update block, or the phase1_adversarial_verification_update block) was edited.",
+    "capability_status_change": {
+      "capability_ref": "§22/§23 Candidate 26-char production identifier",
+      "before_status": "CANDIDATE ONLY (layer B — not connected to live issuance)",
+      "after_status": "GATED CAPABLE, NOT ACTIVE — wired into a real (multiply-gated, currently-closed) issuance path",
+      "detail": "src/candidate/identifier.js promoted to src/identifier.js and wired into src/production-issuance.js + bin/tii.js issue --production. Every call is checked against src/production-gate.js, an 9-condition AND gate (production_requested, identifier_profile_frozen, governance_approved, resolver_approved, iana_gate_satisfied, signing_ready, writer_healthy, recovery_clear, checkpoint_current). In this repository's committed configuration the gate always reports available:false. See spec/production-launch-gate.md G2.",
+      "still_true": "src/id.js's 12-character generator remains the only generator the TEST path (src/ledger.js issueTII()) ever calls. No production identifier has been issued. identifier_status remains \"test\" for the one existing identifier."
+    },
+    "new_capabilities_this_phase": [
+      {
+        "capability": "Multi-condition production issuance gate",
+        "status": "PASS (A - live core), gate always closed in committed configuration",
+        "test": "test/production-gate.test.js, 28 tests: fail-closed matrix (flag absent/empty/false/malformed; each of 8 other conditions independently blocking), no single-variable authorization, no inference from NODE_ENV/hostname/Vercel env, dry-run never appends, one explicit real gated issuance against a disposable ledger, deterministic collision handling, checkpoint-after-every-production-mutation policy with signing-failure handling, test/production separation, no HTTP exposure"
+      },
+      {
+        "capability": "Production checkpoint policy (checkpoint after every mutation, fail-visible on signing failure)",
+        "status": "PASS - implemented and tested",
+        "test": "test/production-gate.test.js §17 test: sabotages checkpoint creation for one call, confirms the mutation stays committed, confirms further production mutations are blocked via checkpoint_current, confirms operator recovery restores availability"
+      }
+    ],
+    "gates_g1_to_g14": {
+      "G1_identifier_syntax": "PASS",
+      "G2_production_issuance_isolation": "PASS",
+      "G3_key_custody": "CONDITIONAL_PASS",
+      "G4_signed_checkpoints": "PASS",
+      "G5_writer_safety": "PASS",
+      "G6_recovery_idempotency": "PASS",
+      "G7_resolver": "CONDITIONAL_PASS",
+      "G8_governance": "UNRESOLVED",
+      "G9_iana": "CONDITIONAL_PASS",
+      "G10_public_only_policy": "PASS",
+      "G11_security": "PASS",
+      "G12_reconstruction_succession": "PASS",
+      "G13_release_artifacts": "CONDITIONAL_PASS",
+      "G14_first_issuance_procedure": "PASS",
+      "overall_launch_status": "NOT_READY"
+    },
+    "test_suite": {
+      "before_this_phase": 146,
+      "after_this_phase": 175,
+      "breakdown": "146 - 18 (old candidate-identifier.test.js) + 19 (renamed/updated identifier.test.js) + 28 (new production-gate.test.js) = 175"
+    }
   }
 }

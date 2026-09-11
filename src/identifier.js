@@ -1,17 +1,27 @@
 'use strict';
 
 /**
- * CANDIDATE production identifier profile — NOT WIRED IN.
+ * TII Identifier Syntax 1.0 — the PRODUCTION identifier profile.
  *
- * This module is supporting code for the production-identifier freeze audit
- * (see spec/identifier-syntax-1.0-candidate.md and spec/freeze-audit.md). It is
- * NOT imported by src/id.js, src/ledger.js, or src/server.js. Issuing a real TII
- * still uses the provisional 12-character generator in src/id.js, and every
- * issued identifier remains identifier_status: "test".
+ * Promoted from src/candidate/identifier.js (freeze audit,
+ * spec/identifier-syntax-1.0-candidate.md) during the Production Launch Gate
+ * phase (spec/production-launch-gate.md, G1/G2). It is now wired into
+ * src/production-issuance.js and bin/tii.js `issue --production`, but
+ * PRODUCTION ISSUANCE ITSELF REMAINS DISABLED — every call into the
+ * production issuance path is gated by src/production-gate.js, which is
+ * closed by default and requires multiple independent conditions to all be
+ * true before a production identifier can be minted (none of them are true
+ * in this repository's committed configuration). See
+ * test/production-gate.test.js for the fail-closed matrix.
  *
- * Nothing here flips the production switch. Reversible by deleting this file.
+ * TEST issuance is completely unaffected by this module: src/id.js's
+ * provisional 12-character generator remains the only thing src/ledger.js's
+ * issueTII() (the TEST path) ever calls. This module — 26-character tokens —
+ * and src/id.js's 12-character tokens are syntactically distinct on sight,
+ * which is a deliberate, additional separation between test and production
+ * identifiers beyond the identifier_status field (spec/production-launch-gate.md §6).
  *
- * ── Candidate profile ──────────────────────────────────────────────────────
+ * ── Frozen profile — TII Identifier Syntax 1.0 ─────────────────────────────
  *   identifier   : "tii:" <token>
  *   token        : 128 bits of CSPRNG entropy, RFC 4648 Base32, unpadded,
  *                  lowercase, exactly 26 characters

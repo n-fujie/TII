@@ -194,3 +194,18 @@ Verified: the governance model does **not** reintroduce —
 | Registrar | — | **unresolved** |
 | IANA registration | RFC 7595 provisional draft prepared | **NOT SUBMITTED** |
 | Production issuance | — | **DISABLED** |
+
+## 10. Production Launch Gate re-check (2026-09-11) — appended, nothing above erased
+
+Re-evaluated explicitly as launch gate **G8** in
+`spec/production-launch-gate.md`. Per that task's own instruction — "If
+legal status is unresolved: G8 = UNRESOLVED. Do not guess." — this phase
+makes **no** determination of P/A Institute's legal entity status (whether
+it is itself a legal entity name or an operating name for some other legal
+entity) and supplies **no** named individual for the IANA contact field.
+Both remain exactly as documented above: **candidate / unresolved**.
+**G8 = UNRESOLVED.** This is not a regression from this table — the table
+above already carried these fields as unresolved; this section confirms
+that status explicitly, in the vocabulary the launch-gate audit uses, and
+states plainly that resolving it requires steward input this task does not
+have and is not authorized to invent.

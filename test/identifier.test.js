@@ -1,9 +1,11 @@
 'use strict';
 
 /**
- * Tests for the CANDIDATE production identifier profile (src/candidate/identifier.js).
- * Production issuance is NOT enabled by these tests — they only exercise the
- * candidate module in isolation.
+ * Tests for TII Identifier Syntax 1.0, the production identifier profile
+ * (src/identifier.js — promoted from src/candidate/identifier.js in the
+ * Production Launch Gate phase). Production ISSUANCE is not exercised here —
+ * only the pure syntax/generation module in isolation. See
+ * test/production-gate.test.js for the gate and the full issuance path.
  */
 
 const test = require('node:test');
@@ -11,7 +13,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const id = require('../src/candidate/identifier');
+const id = require('../src/identifier');
 
 test('entropy: a token decodes to exactly 128 bits (16 bytes)', () => {
   for (let i = 0; i < 200; i++) {
@@ -208,8 +210,8 @@ test('no hosting-provider hostname can appear in a canonical identifier', () => 
   assert.ok(!/vercel|http|\/\//.test(s));
 });
 
-test('the candidate module uses only CSPRNG — no Math.random anywhere', () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'candidate', 'identifier.js'), 'utf8');
+test('the module uses only CSPRNG — no Math.random anywhere', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'identifier.js'), 'utf8');
   assert.ok(!/Math\.random/.test(src), 'identifier.js must not reference Math.random');
 });
 
@@ -233,11 +235,21 @@ test('spec/test-vectors.json matches the reference implementation', () => {
   }
 });
 
-test('candidate module is not wired into the running system', () => {
+test('TEST issuance never uses this module — src/id.js (12-char) is the only generator src/ledger.js issueTII() calls', () => {
   for (const f of ['id.js', 'ledger.js', 'server.js', 'export.js']) {
     const src = fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8');
-    assert.ok(!/candidate\//.test(src), `src/${f} must not import src/candidate/*`);
+    assert.ok(!/require\(['"]\.\/identifier['"]\)/.test(src), `src/${f} (a TEST-path or public-surface module) must not import src/identifier.js`);
   }
+});
+
+test('this module IS wired into the gated production-issuance path (expected — G2), and nowhere else', () => {
+  const productionIssuanceSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'production-issuance.js'), 'utf8');
+  assert.match(productionIssuanceSrc, /require\(['"]\.\/identifier['"]\)/, 'src/production-issuance.js is expected to wire in the production identifier profile');
   const cli = fs.readFileSync(path.join(__dirname, '..', 'bin', 'tii.js'), 'utf8');
-  assert.ok(!/candidate\//.test(cli));
+  assert.match(cli, /production-issuance/, 'bin/tii.js is expected to expose the gated production issuance path');
+  // and no candidate/ directory reference survives anywhere (the module was promoted, not duplicated)
+  for (const f of ['id.js', 'ledger.js', 'server.js', 'export.js', 'production-issuance.js', 'production-gate.js']) {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'src', f), 'utf8');
+    assert.ok(!/candidate\//.test(src), `src/${f} must not reference src/candidate/* (nothing should still import from there)`);
+  }
 });

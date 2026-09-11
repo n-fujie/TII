@@ -1,13 +1,23 @@
-# TII Identifier Syntax and Resolution Specification — 1.0 **Candidate**
+# TII Identifier Syntax and Resolution Specification — 1.0
 
 Transition-Ignition Identifier (TII) · 遷移発火識別子
 
-> **Status: 1.0 CANDIDATE — not final.** This document is produced for the
-> production-identifier freeze audit ([`freeze-audit.md`](freeze-audit.md)). It
-> is not final until that audit is accepted. **Production issuance is disabled.**
-> No production TII has been issued; every issued identifier is
-> `identifier_status: "test"`. The reference implementation of this candidate
-> profile is `src/candidate/identifier.js` and is **not wired into issuance**.
+> **Status: 1.0 — FROZEN AS A SPECIFICATION (Production Launch Gate, G1,
+> 2026-09-11).** The syntax, encoding, canonicalization, and validation rules
+> below are frozen and will not change without a new major version. This is a
+> SPECIFICATION freeze, not a production-readiness declaration — see
+> [`production-launch-gate.md`](production-launch-gate.md) for the full G1–G14
+> launch-gate table. **Production issuance remains DISABLED**, gated by
+> `src/production-gate.js`'s multi-condition check, which this repository's
+> committed configuration never satisfies. No production TII has been issued;
+> every identifier in the committed canonical ledger is
+> `identifier_status: "test"`. The reference implementation of this frozen
+> profile is `src/identifier.js` (promoted from `src/candidate/identifier.js`
+> during the Production Launch Gate phase — see
+> `src/candidate/README.md`), wired into `src/production-issuance.js` and
+> `bin/tii.js issue --production`, but every call into that path is refused
+> unless the gate is explicitly, multiply satisfied — see
+> `spec/production-launch-gate.md` §G2 and `test/production-gate.test.js`.
 
 The general TII data model, append-only semantics, optional modules, localization
 model, evidence/judgement/display separation, and "no display-driven mutation"
@@ -470,10 +480,28 @@ governance and MUST NOT be hard-coded before then.
 
 ## Appendix A. Reference implementation
 
-`src/candidate/identifier.js` (syntax; `parseCanonicalTII` /
-`parseTIIReference`), `src/candidate/jcs.js` (RFC 8785 JCS canonicalize + strict
-parser), `src/candidate/checkpoint.js` (Ed25519 signing over JCS). Tests:
-`test/candidate-identifier.test.js`, `test/candidate-jcs.test.js`,
-`test/candidate-checkpoint.test.js`. Vectors: `spec/test-vectors.json`
-(regenerate: `node spec/gen-test-vectors.js`). None of these are imported by the
-running system; production issuance is disabled.
+`src/identifier.js` (syntax; `parseCanonicalTII` / `parseTIIReference` —
+promoted from `src/candidate/identifier.js`), `src/jcs.js` (RFC 8785 JCS
+canonicalize + strict parser — promoted from `src/candidate/jcs.js` in
+production-hardening Phase 1), `src/checkpoint.js` (Ed25519 signing over JCS
+— promoted from `src/candidate/checkpoint.js`, same phase). Tests:
+`test/identifier.test.js`, `test/jcs.test.js`, `test/checkpoint.test.js`.
+Vectors: `spec/test-vectors.json` (regenerate: `node spec/gen-test-vectors.js`).
+`src/identifier.js` IS wired — into `src/production-issuance.js` and
+`bin/tii.js issue --production` — but gated: see
+`spec/production-launch-gate.md` G2 and `src/production-gate.js`. Production
+issuance remains disabled; nothing above changes that.
+
+## Appendix B. Freeze record (Production Launch Gate phase, 2026-09-11)
+
+This specification's syntax (§2–7), generation algorithm (§3), collision
+handling (§8), and canonicalization (§6) are **frozen as TII Identifier
+Syntax 1.0** — reconfirmed unchanged from the candidate profile above,
+including the 128-bit → 26-character zero-pad-tail rule (§4, §6): the final
+Base32 symbol's low 2 bits must be zero, restricting it to one of
+`{a, e, i, m, q, u, y, 4}`. Freezing the specification is independent of,
+and does not by itself satisfy, any other production launch gate — see
+`spec/production-launch-gate.md` for the full G1–G14 table and the explicit
+statement that production issuance requires every other gate (governance,
+resolver, IANA, security, etc.) to also pass, none of which this freeze
+touches.

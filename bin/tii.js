@@ -13,6 +13,8 @@ const exporters = require('../src/export');
 const recovery = require('../src/recovery');
 const checkpointStore = require('../src/checkpoint-store');
 const statusModule = require('../src/status');
+const gate = require('../src/production-gate');
+const { issueProductionTII } = require('../src/production-issuance');
 
 const DATA_FILE = process.env.TII_LEDGER || path.join(__dirname, '..', 'data', 'ledger.jsonl');
 
@@ -25,7 +27,9 @@ const [, , cmd, ...args] = process.argv;
 function usage() {
   console.log(`tii — Transition-Ignition Identifier CLI (PROVISIONAL / test identifiers)
 
-  tii issue [--recorder ID] [--note TEXT]
+  tii issue [--recorder ID] [--note TEXT]                       # TEST identifier (identifier_status: "test")
+  tii issue --production [--dry-run] [--recorder ID]            # PRODUCTION identifier — gated OFF by default; see 'tii production-status'
+  tii production-status [--checkpoint-dir DIR]                  # show the multi-condition production launch gate
   tii append --file event.json           # {tii,event_type,recorder,content,...}
   tii show <tii>                         # projected view (JSON)
   tii events <tii>
@@ -55,10 +59,32 @@ function flag(name, def) {
   const i = args.indexOf(name);
   return i >= 0 ? args[i + 1] : def;
 }
+function hasFlag(name) {
+  return args.includes(name);
+}
 
 try {
   switch (cmd) {
     case 'issue': {
+      if (hasFlag('--production')) {
+        // PRODUCTION path — see src/production-issuance.js and
+        // src/production-gate.js. Gated OFF by default; this phase does not
+        // flip that gate, so every invocation of this branch in this
+        // repository's committed configuration throws ProductionGateClosedError,
+        // dry-run or not (dry-run additionally never touches the ledger even
+        // if the gate were somehow open).
+        const ledger = load();
+        const dryRun = hasFlag('--dry-run');
+        const result = issueProductionTII(ledger, {
+          dryRun,
+          recorder: flag('--recorder', 'cli'),
+          content: flag('--note') ? { tracking_started_note: flag('--note') } : {},
+          idempotency_key: flag('--idempotency-key'),
+          checkpointDir: flag('--checkpoint-dir'),
+        });
+        console.log(JSON.stringify(result, null, 2));
+        break;
+      }
       const ledger = load();
       const { tii, event } = ledger.issueTII({
         recorder: flag('--recorder', 'cli'),
@@ -66,6 +92,16 @@ try {
         idempotency_key: flag('--idempotency-key'),
       });
       console.log(JSON.stringify({ tii, event }, null, 2));
+      break;
+    }
+
+    case 'production-status': {
+      const status = gate.computeGateStatus({
+        ledgerFile: DATA_FILE,
+        checkpointDir: flag('--checkpoint-dir'),
+      });
+      console.log(JSON.stringify(status, null, 2));
+      process.exit(status.available ? 0 : 1);
       break;
     }
     case 'append': {

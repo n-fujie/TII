@@ -206,3 +206,24 @@ No production identifier using the `tii:` scheme may be issued until **all** of:
    with reasons either way.
 
 Steps 4–6 are governance decisions and are **not made by this task**.
+
+---
+
+## G9 re-check (Production Launch Gate phase, 2026-09-11)
+
+Immediately re-checked the official IANA *URI Schemes* registry
+(`https://www.iana.org/assignments/uri-schemes/uri-schemes.xhtml`) as
+required before any production launch decision. Result: **`tii` still does
+not appear as a registered or provisional scheme.** The closest neighboring
+entries by name are `tip` (Transaction Internet Protocol, Permanent) and
+`tn3270` (Permanent) — neither is a collision or a near-miss requiring a
+naming change. No STOP condition is triggered.
+
+This does **not** change the status of this draft: it remains **NOT
+SUBMITTED**, and steps 4–6 above (contact, change controller, and a file/
+don't-file decision) remain governance decisions outside this task's
+authority — see `spec/production-launch-gate.md` G8/G9 for the current,
+explicit UNRESOLVED status of those decisions. The registry MUST be
+re-checked again, a final time, immediately before actual submission (should
+that ever be separately authorized) and again immediately before any first
+production issuance, per the original launch gate above.
