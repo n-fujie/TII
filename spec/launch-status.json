@@ -1,9 +1,22 @@
 {
-  "generated_at": "2026-09-11T08:10:24.656Z",
-  "commit": "b28b4e0",
-  "note": "Machine-readable launch status, updated by the External Infrastructure Closure phase (G7/G8/G9/G3). This is the REAL audited state, computed from src/production-gate.js against the actual committed repository (data/ledger.jsonl, real process.env), not a hard-coded example. No gate was marked PASS merely because more documentation now exists -- see spec/production-launch-gate.md and spec/external-infrastructure-closure.md for the full narrative and the Final Closure Table.",
+  "generated_at": "2026-09-11T08:17:23.976Z",
+  "commit": "a964de6",
+  "note": "Machine-readable launch status, updated by the External Infrastructure Closure phase (G7/G8/G9/G3), re-verified live on a subsequent identical request the same day (see re_verifications below). This is the REAL audited state, computed from src/production-gate.js against the actual committed repository (data/ledger.jsonl, real process.env), not a hard-coded example. No gate was marked PASS merely because more documentation now exists -- see spec/production-launch-gate.md and spec/external-infrastructure-closure.md for the full narrative and the Final Closure Table.",
 
   "overall_launch_status": "NOT_READY",
+
+  "re_verifications": [
+    {
+      "date": "2026-09-11",
+      "trigger": "External Infrastructure Closure phase repeated verbatim",
+      "rdap_transition_ignition_id_org": "available (404)",
+      "rdap_tii_id_org": "available (404)",
+      "rdap_method_control": "iana.org returned live registration data, no errorCode",
+      "iana_tii_scheme": "absent -- clear",
+      "stop_condition_triggered": false,
+      "any_status_changed": false
+    }
+  ],
 
   "production_gate": {
     "available": false,

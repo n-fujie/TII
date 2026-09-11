@@ -248,3 +248,27 @@ registrar maintains a domain registration — it is not the identifier. The
 current steward coordinates the system — it is not the identifier. The
 identifier remains `tii:<token>`. **Production issuance remains DISABLED
 until a later, explicit launch authorization.**
+
+---
+
+## Re-verification log
+
+This phase's closure was re-run in full and found complete on first
+execution. A subsequent request repeated the same phase verbatim; rather
+than duplicate the documents above (which would add no new information and
+risk drifting from this file's own internal cross-references), each
+re-run is logged here with fresh evidence for the two genuinely
+time-sensitive checks — domain availability and IANA registry state —
+which are the only facts in this closure capable of silently going stale.
+Nothing else in this document changes between re-runs unless one of these
+checks comes back different.
+
+| Re-run date | RDAP: `transition-ignition-id.org` | RDAP: `tii-id.org` | RDAP method control | IANA `tii` check |
+|---|---|---|---|---|
+| 2026-09-11 (original) | Available (404) | Available (404) | `iana.org` → live registration data | Absent — clear |
+| 2026-09-11 (re-run, same day) | Available (404) | Available (404) | `iana.org` → live registration data | Absent — clear |
+
+**No change in any external fact between runs.** No STOP condition
+triggered on either check. All statuses, recommendations, and the Final
+Closure Table above are unchanged and reconfirmed current as of the most
+recent row.
