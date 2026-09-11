@@ -347,3 +347,46 @@ canonical-ledger mutation. No prior audit was re-run and no external
 re-checks (RDAP, IANA registry) were performed — this capture reuses the
 findings already recorded in `spec/external-infrastructure-closure.md`.
 Production issuance remains **DISABLED**.
+
+## Legal/accountable name supplied (2026-09-11)
+
+The human operator supplied a real name for C, E, and F's exact
+Change Controller name — the same person for all three, given
+independently under each field rather than as "same as above," which this
+agent treats as the explicit confirmation F's own instructions required
+("do not infer this from C unless the human explicitly states they are the
+same").
+
+```
+C. Legal / accountable name             -> Naoto Fujie   RESOLVED
+E. IANA named contact                   -> Naoto Fujie   RESOLVED
+F. Exact Change Controller name         -> Naoto Fujie   RESOLVED
+   (Change Controller model: Individual -- already APPROVED)
+```
+
+**D (relationship to P/A Institute) was not addressed in this exchange and
+remains UNRESOLVED.** Before this response, the only wording on record was
+offered conditionally ("if factually accurate, a concise form is:
+'Individual operating publicly as P/A Institute'") — never asserted as
+fact. Now that C names an individual and F confirms an individual
+Change Controller model, that wording is *consistent* with what's been
+supplied, but consistency is not the same as confirmation: per this
+project's own repeated instruction not to infer governance fields, this
+agent is not treating it as resolved on inference alone. Asked separately,
+alongside this update.
+
+### G8 status
+
+**Still UNRESOLVED** — three of four required fields (C, E, F's exact
+name) are now resolved; **D is the sole remaining blocker.** Per the
+launch-gate vocabulary this project uses for G8 specifically (PASS /
+UNRESOLVED — no conditional state), G8 cannot move to PASS with any
+required field still open, so it remains UNRESOLVED, not "nearly resolved"
+or any intermediate label — the same discipline applied throughout this
+decision sheet.
+
+No other gate status changes as a result of this update: G3, G7, and G9
+remain exactly as recorded in the Final Approval Capture above (no
+external action occurred, so their CONDITIONAL PASS reasoning is
+unaffected by a governance-identity field). Production issuance remains
+**DISABLED**.
