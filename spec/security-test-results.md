@@ -99,3 +99,51 @@ the §26-class forgery gap referenced elsewhere in this audit series.
 
 No other item in this document changed. Items 1, 2, 3, and 5 remain exactly
 as found in the original audit and are not addressed by this phase.
+
+## Adversarial verification update (appended 2026-09-11)
+
+**Everything above, including the Phase 1 update directly above this
+section, is unchanged.** A dedicated adversarial pass against commit
+`4ce2d80` specifically tried to break the Phase-1-update claim above ("item
+4 ... is closed") and a related new route. Full detail:
+[phase1-adversarial-verification.md](phase1-adversarial-verification.md).
+
+**The Phase-1-update claim above was incomplete.** It correctly closed the
+*token-gating* half of item 4 (no token = disabled) but the *directory
+confinement* half — "restricted to a configured safe directory... paths
+that escape it are rejected" — was only lexically enforced
+(`path.resolve()` + string-prefix check) and was defeated by a symlink
+planted **inside** the configured safe directory pointing **outside** it: a
+direct symlink, a nested symlink chain, and a symlinked directory all
+escaped the confinement and successfully hashed a file outside the safe
+directory. **Fixed** in this pass: `resolveSafeHashPath()`
+(`src/server.js`) now resolves both the candidate path and the safe
+directory through `fs.realpathSync()` (following every symlink) before the
+prefix check, so confinement is checked against where a path actually
+points on disk, not its literal spelling. Permanent regression test:
+`test/admin-security.test.js` test M.
+
+**A second, previously-unaudited defect was found** in a route this same
+Phase 1 introduced: `GET /checkpoint/verify?file=<path>` is deliberately
+unauthenticated (checkpoint verification is meant to be publicly
+checkable), but its `file` query parameter was forwarded, unvalidated, into
+an internal API whose `file` option is meant to be trusted (the CLI
+legitimately verifies arbitrary externally-retrieved checkpoint files this
+way). This made the public route an unauthenticated file-existence oracle
+over the server filesystem — `ENOENT` vs. JSON-parse-failure messages
+distinguished non-existent from existing-but-non-checkpoint paths for any
+absolute or traversal path supplied. **Fixed**: the route now requires
+`file` to be a bare filename before it is passed through; the internal API
+and the CLI's own legitimate arbitrary-path usage are untouched. Permanent
+regression test: `test/admin-security.test.js` test N.
+
+Both fixes were verified against the full test suite (146/146 passing) and
+neither changes the CLI's or `checkpointStore`'s trusted-caller behavior —
+only the two HTTP boundaries that accept untrusted input were hardened.
+Additional limitations were found and are documented (not fixed, as fixing
+would require a design/policy decision outside this pass's repair scope) in
+`spec/phase1-adversarial-verification.md` — notably that checkpoint
+"latest" selection can be masked by an attacker with directory-write-only
+access, and that a backdated checkpoint signed with a compromised
+pre-revocation key is cryptographically indistinguishable from a genuine
+historical one.

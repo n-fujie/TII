@@ -23,7 +23,26 @@ const RESOLVER_BASE = process.env.TII_RESOLVER_BASE_URL || '';
 const CHECKPOINT_DIR = process.env.TII_CHECKPOINT_DIR || path.join(__dirname, '..', 'checkpoints');
 // P0-B: file hashing is restricted to a configured safe directory, or disabled
 // entirely — never an arbitrary server path. See spec/production-hardening-phase1.md §P0-B.
-const ADMIN_HASH_DIR = process.env.TII_ADMIN_HASH_DIR ? path.resolve(process.env.TII_ADMIN_HASH_DIR) : '';
+//
+// ADVERSARIAL VERIFICATION FINDING (spec/phase1-adversarial-verification.md §13,
+// HIGH): the original lexical path.resolve()-only confinement was defeated by a
+// symlink planted INSIDE the safe directory pointing outside it — a purely
+// string-based prefix check never notices that the resolved path, once symlinks
+// are followed, lands somewhere else entirely. Fixed by resolving both the safe
+// directory and every requested path through fs.realpathSync() before the prefix
+// check, so the check runs against where the path actually points on disk, not
+// its literal spelling. realpath is resolved once for ADMIN_HASH_DIR at startup;
+// if the configured directory does not exist yet, hashing is disabled rather than
+// throwing at startup (an operator may configure the directory before it exists).
+const ADMIN_HASH_DIR_REAL = (() => {
+  if (!process.env.TII_ADMIN_HASH_DIR) return '';
+  try {
+    return fs.realpathSync(path.resolve(process.env.TII_ADMIN_HASH_DIR));
+  } catch {
+    return ''; // configured directory does not exist (yet) — hashing stays disabled, never falls open
+  }
+})();
+const ADMIN_HASH_DIR = ADMIN_HASH_DIR_REAL;
 
 const ledger = new Ledger(DATA_FILE).load();
 
@@ -96,16 +115,43 @@ function jsonMaybe(str, fallback) {
   }
 }
 
-/** Resolve a path the admin may hash: must stay within ADMIN_HASH_DIR. */
+/**
+ * Resolve a path the admin may hash: must stay within ADMIN_HASH_DIR.
+ *
+ * Confinement is realpath-based, not merely lexical: a symlink INSIDE the safe
+ * directory that points outside it is rejected, because the check runs against
+ * where the path actually resolves on disk (fs.realpathSync, which follows every
+ * symlink in the chain) rather than its literal spelling. A lexical
+ * path.resolve()-only check is not sufficient — see
+ * spec/phase1-adversarial-verification.md §13 for the failing case this closes
+ * (direct symlink, nested symlink, and symlinked-directory escape all verified
+ * fixed by this function). The realpath'd result is what gets hashed, not a
+ * path re-derived from the caller's original string, which keeps the gap
+ * between validation and read as small as the syscalls themselves — this does
+ * not eliminate every theoretical TOCTOU window (a symlink swapped in the
+ * instant between realpathSync and the read could still redirect a read; Node's
+ * fs API has no portable O_NOFOLLOW-and-fstat-confine primitive), which is
+ * documented as a residual, narrow limitation rather than silently claimed
+ * fixed.
+ */
 function resolveSafeHashPath(relPath) {
   if (!ADMIN_HASH_DIR) throw new Error('file hashing is disabled (TII_ADMIN_HASH_DIR is not configured)');
   if (!relPath) throw new Error('path is required');
   if (path.isAbsolute(relPath)) throw new Error('path must be relative to the configured safe directory');
-  const resolved = path.resolve(ADMIN_HASH_DIR, relPath);
-  if (resolved !== ADMIN_HASH_DIR && !resolved.startsWith(ADMIN_HASH_DIR + path.sep)) {
+  const lexical = path.resolve(ADMIN_HASH_DIR, relPath);
+  if (lexical !== ADMIN_HASH_DIR && !lexical.startsWith(ADMIN_HASH_DIR + path.sep)) {
     throw new Error('path escapes the configured safe directory');
   }
-  return resolved;
+  let real;
+  try {
+    real = fs.realpathSync(lexical);
+  } catch (e) {
+    throw new Error('path does not exist or cannot be resolved: ' + e.message);
+  }
+  if (real !== ADMIN_HASH_DIR && !real.startsWith(ADMIN_HASH_DIR + path.sep)) {
+    throw new Error('path escapes the configured safe directory (resolves outside it through a symlink)');
+  }
+  return real;
 }
 
 function idempotencyKeyFrom(req, body) {
@@ -245,8 +291,30 @@ const server = http.createServer(async (req, res) => {
     }
 
     // CLAIM B ONLY: signed checkpoint. Distinct route, distinct status vocabulary.
+    //
+    // ADVERSARIAL VERIFICATION FINDING (spec/phase1-adversarial-verification.md
+    // §16, MEDIUM-HIGH): this route is deliberately UNAUTHENTICATED (checkpoint
+    // verification is meant to be publicly checkable), which means the `file`
+    // query param must never be allowed to name a path outside CHECKPOINT_DIR —
+    // checkpointStore.verifyCheckpoint()'s `file` option is a trusted parameter
+    // (the CLI legitimately passes arbitrary paths so an operator can verify an
+    // externally-retrieved checkpoint copy — see spec/checkpoint-operation.md);
+    // it is this PUBLIC ROUTE's job to restrict what untrusted callers may pass
+    // through it, not verifyCheckpoint()'s. Only a bare filename (no path
+    // separators, not absolute, no "..") is accepted; anything else is rejected
+    // before it ever reaches the filesystem, closing what was previously an
+    // unauthenticated file-existence oracle over the whole server filesystem.
     if (method === 'GET' && parts[0] === 'checkpoint' && parts[1] === 'verify') {
-      const result = checkpointStore.verifyCheckpoint(ledger, { dir: CHECKPOINT_DIR, file: url.searchParams.get('file') || undefined });
+      const rawFile = url.searchParams.get('file');
+      let fileParam;
+      if (rawFile) {
+        const base = path.basename(rawFile);
+        if (base !== rawFile || rawFile === '.' || rawFile === '..') {
+          return sendJSON(res, 400, { status: 'INVALID', reason: 'file must be a bare checkpoint filename within the checkpoint directory, not a path' });
+        }
+        fileParam = rawFile;
+      }
+      const result = checkpointStore.verifyCheckpoint(ledger, { dir: CHECKPOINT_DIR, file: fileParam });
       return sendJSON(res, result.status === 'VERIFIED' ? 200 : 200, result);
     }
     if (method === 'GET' && parts[0] === 'checkpoint' && parts[1] === 'list') {

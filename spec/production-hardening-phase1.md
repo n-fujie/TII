@@ -92,14 +92,28 @@ There is no anonymous fallback, in either direction.
   admin mutation capability by construction (verified by
   `test/admin-security.test.js`, test L).
 
-Automated coverage: `test/admin-security.test.js` (6 tests) — no-token →
-disabled, wrong-token → denied, correct-token → allowed, token never in any
-response, token never in the ledger/exports, path-traversal and
-absolute-path rejection on hash-file, and the static-deployment check.
+Automated coverage: `test/admin-security.test.js` (6 tests, since grown to
+8 — see the correction note below) — no-token → disabled, wrong-token →
+denied, correct-token → allowed, token never in any response, token never
+in the ledger/exports, path-traversal and absolute-path rejection on
+hash-file, and the static-deployment check.
+
+> **Correction (adversarial verification, 2026-09-11):** the safe-directory
+> claim above ("restricted to an explicitly configured safe directory")
+> was only lexically enforced when first written, and was defeated by a
+> symlink planted inside the safe directory pointing outside it. A second,
+> unauthenticated defect was also found in `GET /checkpoint/verify?file=`.
+> Both were fixed the same day, with permanent regression tests. See
+> [phase1-adversarial-verification.md](phase1-adversarial-verification.md)
+> for full detail — nothing in this document above the correction was
+> rewritten to hide that the original claim was incomplete.
 
 ## Test suite
 
-`node --test` (repo root): **all 144 tests pass, 0 failing** — up from a
+`node --test` (repo root): **all 146 tests pass, 0 failing** (144 at the
+end of the original hardening work; +2 permanent regression tests added by
+the adversarial-verification pass, test/admin-security.test.js tests M and
+N) — up from a
 pre-Phase-1 baseline of 120, +24 new tests: 6 admin-security, 5 writer-lock,
 5 crash-recovery, 7 checkpoint-store, plus a net +1 from a pre-existing
 candidate-identifier test updated for the `src/candidate/` → `src/` move. No

@@ -625,3 +625,61 @@ no governance/succession mechanism was implemented this phase.
 Re-run everything: `for f in capability adversarial concurrency performance
 reconstruction demonstration; do node spec/audit/$f-audit.js 2>/dev/null ||
 node spec/audit/$f.js; done` (the perf + concurrency runs take ~1–2 min).
+
+---
+
+## Adversarial Verification of Production-Hardening Phase 1
+
+Appended 2026-09-11. **Everything above this section, including the
+"Production-Hardening Phase 1 — Before → Repair → After" section, is
+unchanged from its prior form** — nothing above was edited, softened, or
+reworded. This section records the results of a dedicated adversarial pass
+against commit `4ce2d80` that specifically tried to break the Phase 1
+hardening claims (not merely re-confirm them). Full detail, reproduction
+steps, and root-cause analysis:
+[phase1-adversarial-verification.md](phase1-adversarial-verification.md);
+machine-readable form: [phase1-failure-matrix.json](phase1-failure-matrix.json).
+
+**Two real, exploitable defects were found in Phase 1's own new code and
+fixed, each with a permanent regression test:**
+
+1. **D1 (HIGH):** `/admin/hash-file`'s "restricted to a configured safe
+   directory" claim — stated as closed in the Phase-1 update above — was
+   only half true. The directory confinement was purely lexical
+   (`path.resolve` + string prefix); a symlink planted *inside* the safe
+   directory pointing *outside* it completely bypassed it (direct symlink,
+   nested symlink, and symlinked directory all escaped). Fixed via
+   `fs.realpathSync()`-based confinement.
+2. **D2 (MEDIUM-HIGH):** `GET /checkpoint/verify?file=`, a new,
+   deliberately unauthenticated route this same phase introduced, forwarded
+   its query parameter uninspected into a trusted internal API, making it
+   an unauthenticated file-existence oracle / arbitrary-path reader over
+   the server filesystem. Fixed by restricting the parameter to a bare
+   filename at the HTTP boundary.
+
+**Several further limitations were found, reproduced, and documented
+without being fixed**, because fixing them would require a design/policy
+decision this phase's own instructions forbid making unilaterally (see the
+adversarial-verification doc's Defect List L1–L9 for the full reasoning on
+each) — most notably: checkpoint "latest" selection trusts filename sort
+over validity (L1); a checkpoint backdated with a compromised
+pre-revocation key is cryptographically indistinguishable from a genuine
+historical one, confirmed empirically (L2); TII's checkpoints are not yet
+an "external anchor" in any deployment where the checkpoint directory
+isn't actually held independently of the ledger's host (L3); and TII adds
+no directory-level fsync, so its crash-safety guarantee is scoped to
+process crashes, not power-loss durability of directory metadata on every
+filesystem (L9, relevant to §27 above).
+
+**Everything else tested — the mandatory §8-equivalent restart+idempotency
+sequence, the full 9-point journal crash matrix, 2/10/100-writer
+concurrency, the 5-type partial-tail-recovery diagnostics, checkpoint/
+ledger divergence states, the public-only leakage confirmation, static
+mirror hygiene, and the live deployment's read-only posture — held up under
+adversarial testing.** Phase 1 is not claimed stronger than it is: this
+pass narrows several claims further (see L1–L3 above) rather than
+confirming them unconditionally, and reports the live deployment's exact
+commit provenance as NOT VERIFIED (not observable from page content alone)
+rather than assumed. Score changes are NOT automatic — see
+`spec/capability-matrix.json`'s `phase1_adversarial_verification_update`
+block for the itemized before/after.

@@ -1,0 +1,160 @@
+{
+  "generated_at": "2026-09-11T00:00:00.000Z",
+  "system_under_test_commit": "4ce2d80",
+  "note": "Adversarial verification of production-hardening Phase 1. Every test ran against disposable copies under os.tmpdir(); the committed canonical ledger (data/ledger.jsonl) was never touched. See spec/phase1-adversarial-verification.md for full narrative detail, reproduction steps, and root-cause analysis.",
+  "defects_found_and_fixed": [
+    {
+      "id": "D1",
+      "title": "Symlink inside the safe directory escapes /admin/hash-file confinement",
+      "severity": "HIGH",
+      "item": 13,
+      "status": "FIXED",
+      "root_cause": "resolveSafeHashPath() in src/server.js validated the requested path with path.resolve() plus a string-prefix check only (purely lexical); it never resolved symlinks, so a symlink whose name lives inside the safe directory but whose target does not was accepted.",
+      "reproduction": "Create a symlink inside TII_ADMIN_HASH_DIR pointing to a file outside it, then POST /admin/hash-file with a valid token and path=<symlink name>. Confirmed for a direct symlink, a nested symlink chain, and a symlinked directory.",
+      "fix": "resolveSafeHashPath() now also resolves the candidate path with fs.realpathSync() (following every symlink) and re-checks the prefix against a realpath-resolved ADMIN_HASH_DIR computed once at startup. The realpath'd result is what gets hashed.",
+      "residual_limitation": "A narrow TOCTOU window remains: a symlink swapped in between realpathSync() and the subsequent read could theoretically still redirect it. Node's fs API has no portable atomic resolve-and-confine-open primitive. This window is now microseconds (two syscalls) versus the previous permanent bypass.",
+      "regression_test": "test/admin-security.test.js test M (permanent)",
+      "files_changed": ["src/server.js"]
+    },
+    {
+      "id": "D2",
+      "title": "GET /checkpoint/verify?file= is an unauthenticated file-existence oracle / arbitrary-path reader",
+      "severity": "MEDIUM-HIGH",
+      "item": 16,
+      "status": "FIXED",
+      "root_cause": "The public, unauthenticated HTTP route forwarded its `file` query parameter directly into checkpointStore.verifyCheckpoint(), whose `file` option is a TRUSTED parameter (the CLI legitimately passes arbitrary paths to verify an externally-retrieved checkpoint file). The route performed no validation of its own before forwarding untrusted input into a trusted API.",
+      "reproduction": "GET /checkpoint/verify?file=<absolute or traversal path> read the target file via fs.readFileSync and returned a distinct error message for ENOENT (non-existent) vs. JSON-parse-failure (existing but non-checkpoint file) -- an unauthenticated existence oracle over the whole server filesystem. Did not return raw file content unless the target happened to be valid checkpoint-shaped JSON.",
+      "fix": "src/server.js's checkpoint/verify handler now requires `file` to be a bare filename (path.basename(f) === f, not '.' or '..') before it is passed to verifyCheckpoint(); anything else is rejected with 400 before any filesystem access. checkpointStore's API and the CLI's own arbitrary-path capability are untouched.",
+      "residual_limitation": null,
+      "regression_test": "test/admin-security.test.js test N (permanent)",
+      "files_changed": ["src/server.js"]
+    }
+  ],
+  "defects_and_limitations_documented_not_fixed": [
+    {
+      "id": "L1",
+      "title": "\"Latest checkpoint\" selection trusts filename sort order, not signature validity",
+      "severity": "MEDIUM",
+      "item": [1, 16],
+      "status": "DOCUMENTED, NOT FIXED",
+      "is_a_forgery": false,
+      "reason_not_fixed": "Fixing requires a 'pick the most recent VALID checkpoint' selection policy -- a design decision (including whether that itself creates a new way to mask a genuine compromise by making it look like a transient failure), not a bug repair. Out of this task's smallest-repair / no-redesign scope.",
+      "detail": "An attacker with checkpoint-directory write access (but not the signing key) can cause a well-formed-but-invalidly-signed file to be picked as 'latest' by filename sort, producing INVALID status by default even while a genuinely valid, older checkpoint exists in the same directory. A checkpoint file that fails to PARSE at all is correctly filtered out and does correctly fall back -- this gap is specific to well-formed-but-wrongly-signed files."
+    },
+    {
+      "id": "L2",
+      "title": "Backdated checkpoint signed with a compromised pre-revocation key is indistinguishable from a genuine historical signature",
+      "severity": "INHERENT LIMITATION",
+      "item": 4,
+      "status": "CONFIRMED, EXPLICITLY NOT FIXED PER TASK INSTRUCTION",
+      "reason_not_fixed": "Requires an independent trusted timestamp authority (RFC 3161 TSA, transparency log, or timely witness countersignature). The task explicitly instructs not to invent a trusted timestamp system in this task.",
+      "detail": "verifySignedCheckpoint()'s revocation check trusts checkpoint.created_at, a field signed by the (possibly compromised) key itself. An attacker holding a key stolen before its revocation can produce a checkpoint dated arbitrarily before the revocation cutoff for arbitrary forged content; it verifies as status:VERIFIED, identically to a genuine historical checkpoint. Empirically confirmed."
+    },
+    {
+      "id": "L3",
+      "title": "No independent temporal anchoring; checkpoints are not yet an \"external anchor\"",
+      "severity": "TERMINOLOGY / SCOPE DISCIPLINE, NOT A CODE DEFECT",
+      "item": 1,
+      "status": "DOCUMENTED",
+      "detail": "checkpoints/ lives on the same host, under the same operator's control, as ledger.jsonl. The Scenario-A forgery-detection property only holds if a pre-forgery checkpoint copy is retained somewhere the attacker did not also compromise. Must not describe this system as having an 'external anchor' or 'independent witness' until checkpoints are actually published outside the operator's own infrastructure."
+    },
+    {
+      "id": "L4",
+      "title": "Writes are permitted with no signing key configured, with no write-time warning",
+      "severity": "DOCUMENTED ACCEPTED RISK",
+      "item": 3,
+      "status": "CONFIRMED, NOT FIXED (matches explicit Phase-1 policy)",
+      "reason_not_fixed": "P0-A's chosen policy is explicitly 'best-effort, never blocks a mutation' -- adding a write-time block or warning is a policy change outside this task's repair scope.",
+      "detail": "Every event written while no signing key is configured is permanently uncheckpointed. Only GET /status or the Audit page surface this; nothing warns at write time."
+    },
+    {
+      "id": "L5",
+      "title": "PID-reuse hazard in isProcessAlive(); no dedicated stale-writer-lock recovery command",
+      "severity": "LOW",
+      "item": [5, 6],
+      "status": "DOCUMENTED, NOT FIXED",
+      "reason_not_fixed": "Additive scope (a nonce field, or a new tii recover subcommand for locks specifically) rather than a bug repair; the underlying race is narrow (requires OS PID recycling within the reclaim window on a busy host).",
+      "detail": "process.kill(pid,0) confirms only that a process with that PID exists, not that it is the same process that acquired the lock. No tii recover subcommand targets a suspected-stale writer lock specifically (only the journal/tail)."
+    },
+    {
+      "id": "L6",
+      "title": "Test-harness artifact in the first writer-lock-crash test attempt (self-corrected)",
+      "severity": "N/A -- methodology note, not a TII defect",
+      "item": 5,
+      "status": "CORRECTED DURING THIS TASK",
+      "detail": "A non-detached child process killed while the parent's event loop was busy-blocked by synchronous spawnSync calls was never reaped by Node, so isProcessAlive() correctly reported the (unreaped, zombie) process as alive per POSIX semantics. Redone with a properly detached/reparented child (the realistic supervisor topology) produced the expected clean PASS result."
+    },
+    {
+      "id": "L7",
+      "title": "Ledger.append() does not expose an idempotent_replay marker; POST /api/tii/:id/events always returns 201",
+      "severity": "LOW",
+      "item": 8,
+      "status": "DOCUMENTED, NOT FIXED",
+      "reason_not_fixed": "No duplicate event is ever created -- the safety property holds. Changing append()'s return shape or the events route's status code touches an existing API contract broadly for a cosmetic inconsistency with no correctness impact -- outside the smallest-repair bar.",
+      "detail": "issueTII() returns {tii, event, idempotent_replay}; append() returns the raw stored event with no such marker on replay, unlike issuance."
+    },
+    {
+      "id": "L8",
+      "title": "A syntactically-valid-but-hash-wrong final event is invisible to recovery.inspect()/load()",
+      "severity": "LOW / BY DESIGN",
+      "item": 10,
+      "status": "DOCUMENTED, WORKING AS DESIGNED",
+      "detail": "Only the separate Ledger.verify() chain check catches this case. recovery.inspect()-based tii recover commands never fire for it. Intentional separation of crash/parse-level corruption (crash-recovery.md's scope) from content-level tampering (verify()'s scope) -- but operators must run both checks, one does not substitute for the other."
+    },
+    {
+      "id": "L9",
+      "title": "No directory-level fsync for journal/lock file creation or removal",
+      "severity": "MEDIUM (power-loss scenario only; not process-crash)",
+      "item": 11,
+      "status": "DOCUMENTED, NOT FIXED",
+      "reason_not_fixed": "Portable directory-fsync is not a small, safe, cross-platform addition (directory handles are not fsync-able identically on every platform); the task's framing for this item is audit-and-document, not fix.",
+      "detail": "fsyncFile() and the ledger append path fsync the file they wrote, never the containing directory. A file's existence/absence after create/unlink is not guaranteed durable across a REAL POWER-LOSS event (not a plain process crash, which preserves already-written data on a live filesystem) unless the underlying filesystem journals directory metadata itself."
+    }
+  ],
+  "section_results": [
+    { "item": 1, "title": "Signed checkpoint trust boundary", "result": "PASS", "notes": "Claims correctly separated in every scenario; L1 documented gap" },
+    { "item": 2, "title": "Checkpoint loss", "result": "PASS", "notes": "No auto-regeneration; MISSING correctly reported; historical checkpoints remain usable" },
+    { "item": 3, "title": "Private-key absence", "result": "PASS", "notes": "Fails closed on checkpoint creation; risk of unprotected writes documented as L4" },
+    { "item": 4, "title": "Private-key compromise model", "result": "PARTIAL", "notes": "Rotation/revocation itself PASS; backdating detection FAIL (expected, L2, not fixable in this task's scope)" },
+    { "item": 5, "title": "Writer lock crash", "result": "PASS", "notes": "After correcting own test-harness artifact (L6); reclaim is PID-liveness-based, never age-based" },
+    { "item": 6, "title": "Lock ownership", "result": "PASS", "notes": "Live holder never silently displaced; PID-reuse gap documented as L5" },
+    { "item": 7, "title": "Two-process test at 2/10/100 writers", "result": "PASS", "notes": "Zero duplicate seq, zero chain breaks at all three scales; refusal rate rises with contention as expected" },
+    { "item": 8, "title": "Process restart + idempotency (mandatory)", "result": "PASS", "notes": "Idempotency state persisted on disk, survives restart, verified via a fresh Ledger instance; minor response-shape gap L7" },
+    { "item": 9, "title": "Journal crash matrix (9 boundaries)", "result": "PASS", "notes": "No boundary produces a duplicate or a silently rewritten prefix; every boundary has a defined operator action" },
+    { "item": 10, "title": "Partial tail recovery (5 corruption types)", "result": "PASS", "notes": "All 5 types produce exact diagnostics; wrong-hash case correctly out of recovery's scope (L8)" },
+    { "item": 11, "title": "Directory durability", "result": "PARTIAL", "notes": "No directory fsync; documented as a power-loss-specific limitation (L9), not fixed" },
+    { "item": 12, "title": "Filesystem support boundary", "result": "DOCUMENTED", "notes": "Local POSIX only verified in this and all prior phases; Windows, NFS, generic network filesystems explicitly NOT VERIFIED" },
+    { "item": 13, "title": "Safe-directory symlink escape", "result": "FAIL_THEN_FIXED", "notes": "D1 -- confirmed broken, then fixed with a permanent regression test" },
+    { "item": 14, "title": "Admin token test", "result": "PASS", "notes": "All 8 required properties verified via test/admin-security.test.js" },
+    { "item": 15, "title": "Public-only leakage test", "result": "PASS", "notes": "Confirms the public-only scope claim is accurate; not a bug, deliberately not fixed" },
+    { "item": 16, "title": "Checkpoint/ledger divergence (7 states)", "result": "PASS", "notes": "No state collapses into another; incidentally surfaced and fixed D2" },
+    { "item": 17, "title": "Static mirror validation", "result": "PASS", "notes": "No secret/operational material leaks into the static build; checkpoint material intentionally not included (limitation, not defect)" },
+    { "item": 18, "title": "Live deployment check", "result": "PASS", "notes": "All required routes verified live, read-only; exact deployed commit hash specifically NOT VERIFIED (not observable from page content)" },
+    { "item": 19, "title": "Re-run capability matrix honestly", "result": "DONE", "notes": "See capability-matrix.json phase1_adversarial_verification_update; no score raised merely because Phase 1 code exists" }
+  ],
+  "required_answers": {
+    "threat_a_signed_checkpoint_now_defeats": "A full-chain regeneration attack (verify()-blind history rewrite) by an attacker who has ledger write access but NOT the signing key, PROVIDED a checkpoint from before the attack was retained somewhere the attacker did not also compromise.",
+    "threat_a_signed_checkpoint_does_not_defeat": "An attacker who also has the signing key (checkpoint becomes indistinguishable from legitimate); backdating with a compromised pre-revocation key (L2); any write made while no signing key was ever configured (L4); any scenario where the only checkpoint copy is on the same host/operator the attacker also compromised (L3).",
+    "what_happens_after_writer_crash": "Stale lock left on disk but correctly reported as STALE_LOCK_PRESENT (via live PID check, not age); next real write attempt reclaims automatically and succeeds; if an unfinished journal or malformed tail is also present, further writes refuse (RecoveryRequiredError) until an explicit tii recover command runs. No duplicate event, no silent data loss in any of 9 tested crash boundaries.",
+    "what_happens_after_signing_key_compromise": "Revocation correctly stops the key from being trusted for FUTURE checkpoints and leaves genuinely pre-compromise checkpoints verifiable, but cannot retroactively invalidate a backdated checkpoint forged with the compromised key before revocation (L2) -- inherent to signature-only schemes without an independent timestamp, explicitly out of this task's scope to solve.",
+    "does_idempotency_survive_restart": "YES. Derived entirely from the idempotency_key field persisted on every canonical event, not an in-memory-only cache. Proven with a freshly-loaded Ledger instance simulating a restarted process.",
+    "can_admin_hash_file_escape_through_symlinks": "It could (D1, HIGH) before this task's fix. Fixed via realpath-based confinement; permanent regression test added.",
+    "exact_filesystem_model_required": "Local POSIX-like filesystem supporting O_EXCL create, fsync, and reliable unlink, single host. NOT supported/verified: network filesystems, NFS specifically, Windows. No directory-level fsync (L9) -- crash-safety is scoped to process/OS crashes on a live filesystem, not power-loss durability of directory metadata on every filesystem.",
+    "can_live_static_mirror_be_verified_as_read_only": "YES. /admin, /status, /checkpoint/list all return the static site's own 404 on the live deployment -- no server-side routing exists at all. vercel.json confirms a static-only build. Exact deployed commit hash NOT independently verifiable from page content alone (reported as NOT VERIFIED for that specific sub-claim)."
+  },
+  "constraints_confirmed_unchanged": {
+    "production_issuance": "DISABLED (unchanged)",
+    "identifier_syntax": "unchanged; src/candidate/identifier.js remains unwired",
+    "domain_purchased": false,
+    "iana_submission": false,
+    "new_product_features_added": false,
+    "architecture_redesigned": false,
+    "multi_writer_distributed_issuance_implemented": false,
+    "canonical_ledger_bytes_changed": false
+  },
+  "test_suite": {
+    "before_this_task": 144,
+    "after_this_task": 146,
+    "new_permanent_regression_tests": ["test/admin-security.test.js test M (D1)", "test/admin-security.test.js test N (D2)"]
+  }
+}

@@ -446,5 +446,51 @@
       "breakdown": "6 admin-security, 5 writer-lock, 5 crash-recovery, 7 checkpoint-store, +1 net from a pre-existing candidate-identifier test updated for the src/candidate/ to src/ file move",
       "pre_existing_tests_modified_assertions": 0
     }
+  },
+  "phase1_adversarial_verification_update": {
+    "generated_at": "2026-09-11T00:00:00.000Z",
+    "note": "Appended after an adversarial-verification pass against commit 4ce2d80 (the phase1_production_hardening_update above). Neither the original 'capabilities' array nor the phase1_production_hardening_update block above was edited. See spec/phase1-adversarial-verification.md and spec/phase1-failure-matrix.json for full detail. Scores were NOT raised merely because Phase 1 code exists -- two real defects were found in that code and are recorded here alongside their fixes.",
+    "defects_found_and_fixed": [
+      {
+        "id": "D1",
+        "capability_ref": "§21 admin hash-file (the same sub-finding the phase1_production_hardening_update above marked closed)",
+        "severity": "HIGH",
+        "before": "believed closed by the P0-B fix (token required + directory confinement)",
+        "actually_found": "the directory confinement itself was purely lexical (path.resolve + string prefix) and was defeated by a symlink planted inside the safe directory pointing outside it -- direct symlink, nested symlink, and symlinked directory all escaped",
+        "after": "fixed via fs.realpathSync()-based confinement; permanent regression test test/admin-security.test.js test M",
+        "correction_to_prior_claim": "spec/capability-boundary-audit.md's Phase-1 update and spec/security-test-results.md's Phase-1 update both stated this sub-finding was 'closed' -- that was true for the token-gating half but incomplete for the directory-confinement half. This block does not delete that prior text (append-only); it corrects the completeness of the claim here."
+      },
+      {
+        "id": "D2",
+        "capability_ref": "new in Phase 1 -- GET /checkpoint/verify (not present in the original capability-boundary-audit.md at all, since the route did not exist before Phase 1)",
+        "severity": "MEDIUM-HIGH",
+        "before": "not previously audited (new route)",
+        "actually_found": "unauthenticated file-existence oracle / arbitrary-path reader via the file query parameter, forwarded uninspected into a trusted internal API",
+        "after": "fixed by restricting the route's file parameter to a bare filename; permanent regression test test/admin-security.test.js test N"
+      }
+    ],
+    "defects_and_limitations_documented_not_fixed": [
+      { "id": "L1", "summary": "checkpoint 'latest' selection trusts filename sort, not signature validity -- an attacker with directory write (no key) can mask a valid older checkpoint behind an invalid newer-named one", "severity": "MEDIUM", "fixed": false, "reason": "policy/design decision, not a bug repair" },
+      { "id": "L2", "summary": "a backdated checkpoint signed with a compromised pre-revocation key is indistinguishable from a genuine historical signature", "severity": "inherent limitation", "fixed": false, "reason": "requires an independent trusted timestamp authority, explicitly out of scope for this task" },
+      { "id": "L3", "summary": "checkpoints are not yet an independent/external anchor -- same host, same operator custody as the ledger today", "severity": "terminology/scope discipline", "fixed": false, "reason": "requires actually publishing checkpoints outside the operator's own infrastructure, a deployment practice not a code change" },
+      { "id": "L4", "summary": "writes are permitted with no signing key configured, no write-time warning surfaced", "severity": "documented accepted risk", "fixed": false, "reason": "matches Phase 1's explicit best-effort checkpoint policy" },
+      { "id": "L5", "summary": "PID-reuse hazard in isProcessAlive(); no dedicated stale-writer-lock recovery command", "severity": "LOW", "fixed": false, "reason": "narrow race, additive scope to fix" },
+      { "id": "L7", "summary": "Ledger.append() has no idempotent_replay marker on its return value unlike issueTII(); POST /api/tii/:id/events always returns 201", "severity": "LOW", "fixed": false, "reason": "cosmetic API inconsistency, no correctness impact, changing the contract broadly is out of smallest-repair scope" },
+      { "id": "L8", "summary": "a syntactically-valid-but-hash-wrong final event is invisible to recovery.inspect()/load(), caught only by the separate Ledger.verify()", "severity": "LOW / by design", "fixed": false, "reason": "intentional separation of crash-recovery scope from tamper-detection scope; operators must run both checks" },
+      { "id": "L9", "summary": "no directory-level fsync for journal/lock file creation or removal -- a power-loss-specific (not process-crash) durability gap", "severity": "MEDIUM (power-loss only)", "fixed": false, "reason": "portable directory-fsync is not a small cross-platform addition; this item's task framing is audit-and-document" }
+    ],
+    "reassessed_dimensions": {
+      "cryptographic_authenticity": "signed-head authenticity: YES (conditional on key custody and pre-forgery checkpoint retention). independent temporal anchoring: NO -- explicitly absent, confirmed by the backdating test (L2). Do not describe checkpoints as an 'external anchor' until published outside the operator's own infrastructure (L3).",
+      "crash_safety": "PASS across all 9 journal-crash-matrix boundaries and all 5 tail-corruption types tested; directory-fsync gap (L9) is a documented power-loss-specific limitation, not a process-crash one.",
+      "concurrency_safety": "PASS at 2/10/100 concurrent writers -- zero duplicate seq, zero chain breaks in all trials; refusal, not queuing, is the fail-closed behavior under contention (caller must retry).",
+      "security": "two real defects found in Phase 1's own new code (D1 HIGH, D2 MEDIUM-HIGH), both fixed with permanent regression tests. Pre-existing P0-B token-gating held up correctly under adversarial testing.",
+      "auditability": "the two-claims separation (ledger chain integrity vs. signed checkpoint) held up in every divergence state tested and never collapsed two distinct facts into one status -- except the L1 gap, where an available fallback checkpoint is not surfaced by default.",
+      "production_readiness": "unchanged from the Phase-1 update above: NOT production-ready. This adversarial pass narrows, not widens, what can honestly be claimed -- signed checkpoints prove less than 'external anchor' framing might suggest (L2, L3), and two exploitable defects existed in code that was already claimed hardened until this task's testing."
+    },
+    "test_suite": {
+      "before_this_task": 144,
+      "after_this_task": 146,
+      "new_permanent_regression_tests": 2
+    }
   }
 }

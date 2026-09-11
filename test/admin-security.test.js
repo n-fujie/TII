@@ -183,6 +183,41 @@ test('J/K — hash-file: disabled with no safe directory configured; path traver
   }
 });
 
+/**
+ * PERMANENT REGRESSION (found by adversarial verification, spec/phase1-adversarial-verification.md
+ * §13, severity HIGH): the original resolveSafeHashPath() used only a lexical
+ * path.resolve() + string-prefix check. A symlink planted INSIDE the safe
+ * directory pointing OUTSIDE it was never followed by that check, so hashing
+ * a path like "escape-link.txt" (a symlink to /etc/passwd or any other file)
+ * silently read straight through the "safe directory" confinement — a direct
+ * symlink, a nested symlink chain, and a symlinked directory all escaped.
+ * Fixed by resolving both the safe directory and the requested path through
+ * fs.realpathSync() before the confinement check (src/server.js
+ * resolveSafeHashPath). This test must remain in the suite permanently.
+ */
+test('M — PERMANENT REGRESSION: a symlink inside the safe directory cannot be used to hash a file outside it', async () => {
+  const safeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tii-safe-symlink-'));
+  const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tii-outside-symlink-'));
+  const secretFile = path.join(outsideDir, 'secret.txt');
+  fs.writeFileSync(secretFile, 'outside content that must never be reachable through the safe directory\n');
+
+  fs.symlinkSync(secretFile, path.join(safeDir, 'direct-link.txt'));
+  fs.symlinkSync(path.join(safeDir, 'direct-link.txt'), path.join(safeDir, 'nested-link.txt'));
+  fs.symlinkSync(outsideDir, path.join(safeDir, 'escape-dir'));
+
+  const srv = await bootServer({ TII_ADMIN_TOKEN: 'tok', TII_ADMIN_HASH_DIR: safeDir });
+  try {
+    for (const p of ['direct-link.txt', 'nested-link.txt', 'escape-dir/secret.txt']) {
+      const r = await requestForm(srv.port, '/admin/hash-file', { path: p, token: 'tok' });
+      assert.equal(r.status, 400, `symlink escape via "${p}" must be rejected, got ${r.status}`);
+      assert.match(r.text, /escapes the configured safe directory/);
+    }
+  } finally {
+    await srv.close();
+    srv.restoreEnv();
+  }
+});
+
 function requestForm(port, urlPath, fields) {
   const body = new URLSearchParams(fields).toString();
   return new Promise((resolve, reject) => {
@@ -201,6 +236,44 @@ function requestForm(port, urlPath, fields) {
 }
 
 /* --------------------------------------------------------------------- L --- */
+
+/**
+ * PERMANENT REGRESSION (found by adversarial verification, spec/phase1-adversarial-verification.md
+ * §16, severity MEDIUM-HIGH): GET /checkpoint/verify is deliberately UNAUTHENTICATED
+ * (checkpoint verification is meant to be publicly checkable), but its `file`
+ * query parameter was forwarded uninspected into checkpointStore.verifyCheckpoint(),
+ * which accepts an absolute path as a TRUSTED parameter (the CLI legitimately
+ * verifies externally-retrieved checkpoint files this way). That made the public
+ * HTTP route an unauthenticated file-existence oracle over the entire server
+ * filesystem (ENOENT vs. parse-error messages distinguish existing from
+ * non-existing paths) and would read+attempt to verify ANY JSON file an attacker
+ * could name. Fixed by restricting the route's `file` param to a bare filename
+ * (src/server.js) before it ever reaches verifyCheckpoint() — the CLI's own
+ * arbitrary-path capability is untouched. This test must remain in the suite
+ * permanently.
+ */
+test('N — PERMANENT REGRESSION: GET /checkpoint/verify?file= cannot be used to probe or read arbitrary server paths', async () => {
+  const outsideDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tii-outside-ckpt-'));
+  const secretFile = path.join(outsideDir, 'secret.txt');
+  fs.writeFileSync(secretFile, 'must never be reachable through the public checkpoint/verify route\n');
+
+  const srv = await bootServer({});
+  try {
+    for (const badFile of [secretFile, '../../../../etc/passwd', 'sub/../../escape.json']) {
+      const r = await request(srv.port, 'GET', '/checkpoint/verify?file=' + encodeURIComponent(badFile));
+      assert.equal(r.status, 400, `"${badFile}" must be rejected before any filesystem access, got ${r.status}`);
+      const body = JSON.parse(r.text);
+      assert.equal(body.status, 'INVALID');
+      assert.ok(!body.reason.includes(secretFile), 'no absolute path is echoed back for a rejected value');
+    }
+    // a bare filename is still accepted (just reports MISSING/INVALID for a nonexistent checkpoint, not a 400)
+    const ok = await request(srv.port, 'GET', '/checkpoint/verify?file=' + encodeURIComponent('some-checkpoint.json'));
+    assert.equal(ok.status, 200);
+  } finally {
+    await srv.close();
+    srv.restoreEnv();
+  }
+});
 
 test('L — static deployment exposes no admin mutation capability', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tii-static-admin-'));
