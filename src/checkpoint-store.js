@@ -31,25 +31,79 @@ class NoSigningKeyError extends Error {
 }
 
 /**
+ * Resolve an optional decryption passphrase for a passphrase-encrypted PKCS8
+ * private key (spec/production-key-custody.md §8.5 — the G3 custody
+ * correction). Most TEST/disposable keys are NOT encrypted and this
+ * correctly resolves to `undefined` for them — nothing about existing
+ * unencrypted-key usage changes.
+ *
+ *   TII_CHECKPOINT_KEY_PASSPHRASE       passphrase text — for secret-manager-injected env vars
+ *   TII_CHECKPOINT_KEY_PASSPHRASE_FILE  path to a file containing the passphrase (e.g. a mounted secret)
+ *
+ * Never logged, never returned to any caller other than the key-parsing step
+ * immediately below, never written anywhere.
+ */
+function resolvePassphrase(env) {
+  if (env.TII_CHECKPOINT_KEY_PASSPHRASE) return Buffer.from(env.TII_CHECKPOINT_KEY_PASSPHRASE, 'utf8');
+  if (env.TII_CHECKPOINT_KEY_PASSPHRASE_FILE) {
+    if (!fs.existsSync(env.TII_CHECKPOINT_KEY_PASSPHRASE_FILE)) return undefined;
+    return Buffer.from(fs.readFileSync(env.TII_CHECKPOINT_KEY_PASSPHRASE_FILE, 'utf8').replace(/\r?\n$/, ''), 'utf8');
+  }
+  return undefined;
+}
+
+/**
  * Resolve a signing keypair from the environment ONLY. Never generates or
  * persists a key on its own — that would be exactly the "silently generate a
  * new production key on startup" behaviour this phase forbids. Returns `null`
- * (not a throw) when unconfigured; callers decide what that means for them.
+ * (not a throw) when unconfigured OR when the configured key cannot be
+ * loaded for any reason (missing file, malformed PEM, wrong/missing
+ * passphrase for an encrypted key) — every failure mode fails closed through
+ * this single return path, never an uncaught exception.
  *
  *   TII_CHECKPOINT_PRIVATE_KEY       PEM text — for env-injected deployments
  *   TII_CHECKPOINT_PRIVATE_KEY_FILE  path to a PEM file — for local/dev/test use
+ *
+ * The PEM may be an ordinary unencrypted PKCS8 key (unchanged behavior — this
+ * is how every existing test's disposable/ephemeral key already works) OR a
+ * passphrase-encrypted PKCS8 key (`-----BEGIN ENCRYPTED PRIVATE KEY-----`),
+ * in which case a passphrase MUST also resolve via resolvePassphrase() above
+ * — an encrypted key with no passphrase available is never attempted, never
+ * silently treated as unencrypted. This is the production custody
+ * correction from spec/production-key-custody.md §8.5: the production
+ * operational copy is a passphrase-encrypted PKCS8 PEM, not a generally-
+ * readable plaintext file — this function is the only place the passphrase
+ * is ever used, and the decrypted key is held only in process memory
+ * (re-exported to a plain PEM string in memory so the unchanged downstream
+ * signing code in src/checkpoint.js — which still takes a plain PEM string —
+ * never needs to know a passphrase was involved). Nothing here writes a
+ * decrypted copy back to disk.
  */
 function resolveSigningKey(env = process.env) {
-  let privateKeyPem = null;
+  let privateKeyPemRaw = null;
   if (env.TII_CHECKPOINT_PRIVATE_KEY) {
-    privateKeyPem = env.TII_CHECKPOINT_PRIVATE_KEY;
+    privateKeyPemRaw = env.TII_CHECKPOINT_PRIVATE_KEY;
   } else if (env.TII_CHECKPOINT_PRIVATE_KEY_FILE) {
     if (!fs.existsSync(env.TII_CHECKPOINT_PRIVATE_KEY_FILE)) return null;
-    privateKeyPem = fs.readFileSync(env.TII_CHECKPOINT_PRIVATE_KEY_FILE, 'utf8');
+    privateKeyPemRaw = fs.readFileSync(env.TII_CHECKPOINT_PRIVATE_KEY_FILE, 'utf8');
   }
-  if (!privateKeyPem) return null;
-  const key = crypto.createPrivateKey(privateKeyPem);
-  const publicKeyPem = crypto.createPublicKey(key).export({ type: 'spki', format: 'pem' }).toString();
+  if (!privateKeyPemRaw) return null;
+
+  const isEncrypted = /BEGIN ENCRYPTED PRIVATE KEY/.test(privateKeyPemRaw);
+  const passphrase = resolvePassphrase(env);
+  if (isEncrypted && !passphrase) return null; // fail closed: never attempted without one
+
+  let keyObject;
+  try {
+    keyObject = isEncrypted
+      ? crypto.createPrivateKey({ key: privateKeyPemRaw, format: 'pem', passphrase })
+      : crypto.createPrivateKey(privateKeyPemRaw);
+  } catch {
+    return null; // malformed PEM, or wrong passphrase for an encrypted key -- fail closed, never throw
+  }
+
+  const privateKeyPem = keyObject.export({ type: 'pkcs8', format: 'pem' }).toString();
+  const publicKeyPem = crypto.createPublicKey(keyObject).export({ type: 'spki', format: 'pem' }).toString();
   return { privateKeyPem, publicKeyPem, keyId: ckpt.keyId(publicKeyPem) };
 }
 

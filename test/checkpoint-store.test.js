@@ -165,3 +165,116 @@ test('list orders checkpoints and reports event_count / created_at / key_id', ()
   assert.ok(list[0].event_count <= list[1].event_count);
   assert.ok(list.every((c) => c.key_id === kp.keyId));
 });
+
+/* ============================================================================
+ * G3 custody correction (spec/production-key-custody.md §8.5): the production
+ * operational key must be a passphrase-encrypted PKCS8 PEM, not a generally-
+ * readable plaintext file. These tests prove resolveSigningKey() correctly
+ * loads an encrypted key with the right passphrase, fails closed with no
+ * passphrase, fails closed with the wrong passphrase, never persists a
+ * decrypted copy to disk, and that checkpoints signed this way verify exactly
+ * like ones signed from a plain (test/disposable) key.
+ * ==========================================================================*/
+
+function encryptedKeyFile(kp, passphrase) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tii-enckey-'));
+  const keyObject = require('node:crypto').createPrivateKey(kp.privateKeyPem);
+  const encryptedPem = keyObject.export({
+    type: 'pkcs8',
+    format: 'pem',
+    cipher: 'aes-256-cbc',
+    passphrase: Buffer.from(passphrase, 'utf8'),
+  });
+  const keyFile = path.join(dir, 'key.encrypted.pem');
+  fs.writeFileSync(keyFile, encryptedPem, { mode: 0o600 });
+  assert.match(fs.readFileSync(keyFile, 'utf8'), /BEGIN ENCRYPTED PRIVATE KEY/, 'sanity: the staged file really is passphrase-encrypted');
+  return keyFile;
+}
+
+test('G3 custody: an encrypted key with the CORRECT passphrase loads and signs successfully', () => {
+  const { l, dir } = freshLedger(1);
+  const kp = generateKeypair();
+  const keyFile = encryptedKeyFile(kp, 'correct horse battery staple');
+  const env = { TII_CHECKPOINT_PRIVATE_KEY_FILE: keyFile, TII_CHECKPOINT_KEY_PASSPHRASE: 'correct horse battery staple' };
+
+  const resolved = store.resolveSigningKey(env);
+  assert.ok(resolved, 'the key must resolve when the correct passphrase is supplied');
+  assert.equal(resolved.keyId, kp.keyId);
+
+  const ckptDir = path.join(dir, 'checkpoints');
+  const created = store.createCheckpoint(l, { dir: ckptDir, env });
+  assert.ok(fs.existsSync(created.file));
+  const verified = store.verifyCheckpoint(l, { dir: ckptDir });
+  assert.equal(verified.status, 'VERIFIED', 'a checkpoint signed via an encrypted key verifies exactly like one signed via a plain key');
+  assert.equal(verified.key_id, kp.keyId);
+});
+
+test('G3 custody: an encrypted key with NO passphrase configured fails closed (never attempted)', () => {
+  const { l, dir } = freshLedger(1);
+  const kp = generateKeypair();
+  const keyFile = encryptedKeyFile(kp, 'some passphrase');
+  const env = { TII_CHECKPOINT_PRIVATE_KEY_FILE: keyFile }; // no TII_CHECKPOINT_KEY_PASSPHRASE(_FILE) at all
+
+  assert.equal(store.resolveSigningKey(env), null, 'resolveSigningKey must return null, never throw, never guess');
+  assert.throws(
+    () => store.createCheckpoint(l, { dir: path.join(dir, 'checkpoints'), env }),
+    (e) => e instanceof store.NoSigningKeyError && e.code === 'no-signing-key'
+  );
+});
+
+test('G3 custody: an encrypted key with the WRONG passphrase fails closed (not a crash, not silently accepted)', () => {
+  const { l, dir } = freshLedger(1);
+  const kp = generateKeypair();
+  const keyFile = encryptedKeyFile(kp, 'the real passphrase');
+  const env = { TII_CHECKPOINT_PRIVATE_KEY_FILE: keyFile, TII_CHECKPOINT_KEY_PASSPHRASE: 'a guessed wrong passphrase' };
+
+  assert.equal(store.resolveSigningKey(env), null, 'a wrong passphrase must resolve to null, not throw an uncaught crypto error');
+  assert.throws(
+    () => store.createCheckpoint(l, { dir: path.join(dir, 'checkpoints'), env }),
+    (e) => e instanceof store.NoSigningKeyError
+  );
+});
+
+test('G3 custody: the passphrase may also be supplied via TII_CHECKPOINT_KEY_PASSPHRASE_FILE', () => {
+  const kp = generateKeypair();
+  const keyFile = encryptedKeyFile(kp, 'file-supplied passphrase');
+  const passphraseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tii-pass-'));
+  const passphraseFile = path.join(passphraseDir, 'passphrase.txt');
+  fs.writeFileSync(passphraseFile, 'file-supplied passphrase\n', { mode: 0o600 });
+
+  const resolved = store.resolveSigningKey({ TII_CHECKPOINT_PRIVATE_KEY_FILE: keyFile, TII_CHECKPOINT_KEY_PASSPHRASE_FILE: passphraseFile });
+  assert.ok(resolved);
+  assert.equal(resolved.keyId, kp.keyId);
+});
+
+test('G3 custody: an ordinary UNENCRYPTED key still loads exactly as before (no regression for test/disposable keys)', () => {
+  const kp = generateKeypair();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tii-plainkey-'));
+  const keyFile = path.join(dir, 'plain-key.pem');
+  fs.writeFileSync(keyFile, kp.privateKeyPem);
+  const resolved = store.resolveSigningKey({ TII_CHECKPOINT_PRIVATE_KEY_FILE: keyFile });
+  assert.ok(resolved);
+  assert.equal(resolved.keyId, kp.keyId);
+});
+
+test('G3 custody: resolveSigningKey() never persists a decrypted plaintext copy to disk', () => {
+  const kp = generateKeypair();
+  const keyFile = encryptedKeyFile(kp, 'no persistence please');
+  const dirBefore = fs.readdirSync(path.dirname(keyFile));
+  store.resolveSigningKey({ TII_CHECKPOINT_PRIVATE_KEY_FILE: keyFile, TII_CHECKPOINT_KEY_PASSPHRASE: 'no persistence please' });
+  const dirAfter = fs.readdirSync(path.dirname(keyFile));
+  assert.deepEqual(dirAfter, dirBefore, 'no new file must appear as a side effect of resolving/decrypting the key');
+  // and the source file on disk must still be the encrypted form, untouched
+  assert.match(fs.readFileSync(keyFile, 'utf8'), /BEGIN ENCRYPTED PRIVATE KEY/);
+});
+
+test('G3 custody: production issuance remains disabled regardless of encrypted-key availability', () => {
+  const gate = require('../src/production-gate');
+  const kp = generateKeypair();
+  const keyFile = encryptedKeyFile(kp, 'irrelevant to production gate');
+  const status = gate.computeGateStatus({
+    ledgerFile: path.join(__dirname, '..', 'data', 'ledger.jsonl'),
+    env: { TII_CHECKPOINT_PRIVATE_KEY_FILE: keyFile, TII_CHECKPOINT_KEY_PASSPHRASE: 'irrelevant to production gate' },
+  });
+  assert.equal(status.available, false, 'having a usable signing key is necessary but never sufficient for the production gate');
+});

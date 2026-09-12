@@ -773,3 +773,41 @@ READY.** **Production issuance remains DISABLED** — key generation
 authorizes no other gate and mints nothing; the software's own
 `TII_PRODUCTION_ISSUANCE_ENABLED`/`TII_GOVERNANCE_APPROVED`/
 `TII_RESOLVER_APPROVED` flags remain unset regardless.
+
+---
+
+## G3 custody audit correction (appended 2026-09-12, same day)
+
+The paragraph immediately above described the operational copy as "a
+plain PEM protected by filesystem permissions plus confirmed FileVault
+disk encryption." **The steward caught that this does not satisfy the
+approved model** ("encrypted private signing key available only to the
+authoritative checkpoint process") — FileVault protects the disk at rest
+while locked, but the key is a plaintext filesystem object the moment the
+host is unlocked, which it must be for the authoritative writer to run at
+all. Disk encryption and key encryption are not the same guarantee, and
+this document should not have implied they were.
+
+**Corrected, not silently redefined:**
+
+- **Key `1b96b82d535afc95` is retired.** Ceremony/test key only — never
+  promoted, never used for a real checkpoint (no `checkpoints/` directory
+  ever existed in the repository while it was live). Its plaintext copy
+  was securely overwritten and removed. Its public key and the non-secret
+  sign/verify/tamper test results remain as audit evidence.
+- **`src/checkpoint-store.js` `resolveSigningKey()` was extended** — the
+  smallest change that satisfies the approved model — to accept a
+  passphrase-encrypted PKCS8 PEM, decrypted via
+  `TII_CHECKPOINT_KEY_PASSPHRASE`/`TII_CHECKPOINT_KEY_PASSPHRASE_FILE`,
+  failing closed (returns `null`, never throws) on a missing or wrong
+  passphrase. No change to Ed25519, JCS, key ID derivation, or the
+  checkpoint format; every existing unencrypted test/disposable key still
+  loads exactly as before. 7 new tests, all passing, alongside the full
+  suite (185/185). Full detail: `spec/production-key-custody.md` §8.5.
+- **No new production key was generated during this correction** — per
+  the steward's own explicit instruction, generation under the corrected
+  mechanism is deferred to a separately authorized ceremony.
+
+**G3 remains CONDITIONAL PASS — unchanged status, corrected reasoning.**
+This does not change G7, G8, G9, or G13, and does not move overall launch
+status off NOT READY. **Production issuance remains DISABLED.**

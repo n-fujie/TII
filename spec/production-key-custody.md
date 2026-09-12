@@ -349,20 +349,104 @@ it is resolved as follows, and recorded here so it is never assumed away:
   nothing operationally and adds real protection for a copy that, by
   design, is not sitting behind the same host's disk encryption.
 
-### 8.4 What remains — human action required (§13 of the ceremony)
+### 8.4 What remained — human action required (§13 of the ceremony)
 
-**G3 remains CONDITIONAL PASS.** Per the ceremony's own rule: it becomes
-PASS only once the human confirms the independent, separately-located
-encrypted recovery copy exists. The exact remaining steps (recovery-copy
-encryption, its placement in a genuinely separate location, and moving
-the plaintext into its permanent operational home) were handed to the
-human operator with exact commands and a checksum to verify against —
-see the ceremony's final report for the precise instructions. This agent
-did not, and structurally cannot, perform the passphrase-entry or
-physical/logical offline-placement steps itself.
+Originally recorded here as the "operational copy" design: a plain PEM
+protected by filesystem permissions plus the host's FileVault disk
+encryption. **That was a mistake, corrected in §8.5 below — read the
+correction, not this paragraph, for the actual accepted design.** Kept
+here, not deleted, per this project's own append-only correction
+discipline.
 
-**No secret material was committed, logged, or exposed in chat.** The
-plaintext staging file's SHA-256 (`d2b9520fb40d2ce0aace5c1267d6e3748a9af13e767fb3a201750fa68b724097`)
-is recorded here only so the human can confirm, after encrypting, that
-the bytes that went into the encrypted copies match what was actually
-generated — this checksum reveals nothing about the key's content.
+### 8.5 CORRECTION (2026-09-12) — the custody model was not actually satisfied
+
+The steward caught this before it went any further: the approved
+operational model was **"encrypted private signing key available only to
+the authoritative checkpoint process."** §8.3's plain-PEM-plus-FileVault
+design does not satisfy that. FileVault protects the disk while the
+machine is powered off or locked; **once the host is unlocked — which it
+must be for the authoritative writer process to run at all — the key was
+a plaintext filesystem object readable by any sufficiently-privileged
+local process.** That is not "encrypted," it is "encrypted-disk-resting,
+plaintext-while-running," and conflating the two would have silently
+redefined the approved requirement. It was not silently redefined —
+it was caught and fixed.
+
+**Corrective actions taken:**
+
+1. **Key `1b96b82d535afc95` (generated in the original ceremony) is
+   retired — ceremony/test key only, never promoted, never activated as
+   the production signing authority.** No production checkpoint was ever
+   created with it (confirmed: no `checkpoints/` directory existed in the
+   repository at any point this key was in use). Its plaintext copy was
+   securely overwritten (3-pass random overwrite, then unlinked — an
+   honest caveat: on modern SSDs with wear-leveling this is best-effort,
+   not a cryptographic erasure guarantee) and removed from
+   `~/.tii-production-key-ceremony/`. Its **public** key, key ID, and the
+   non-secret sign/verify/tamper test results remain as audit evidence
+   that the ceremony mechanics work — this is preserved, per the
+   correction's own instruction, not deleted.
+2. **The production key-loader was corrected** — `src/checkpoint-store.js`
+   `resolveSigningKey()` now accepts a passphrase-encrypted PKCS8 PEM
+   (`-----BEGIN ENCRYPTED PRIVATE KEY-----`) and requires a passphrase to
+   decrypt it, resolved via `TII_CHECKPOINT_KEY_PASSPHRASE` (text, for
+   secret-manager-injected environments) or
+   `TII_CHECKPOINT_KEY_PASSPHRASE_FILE` (a file path, for mounted
+   secrets) — mirroring the existing `_FILE` convention already used for
+   the key path itself. An encrypted key with no passphrase, or the wrong
+   passphrase, resolves to `null` (fails closed) — never an uncaught
+   exception, never a silent fallback to treating it as unencrypted. This
+   is the **smallest** change that satisfies the approved model: no
+   change to Ed25519, JCS, key ID derivation, or the checkpoint format;
+   ordinary unencrypted keys (every test/disposable key in this codebase)
+   load exactly as before, unaffected.
+3. **Selected mechanism: Option B** (passphrase-encrypted PKCS8, standard
+   `openssl pkcs8 -topk8 -v2 aes-256-cbc` format — not a bespoke scheme).
+   Option A (OS Keychain) was considered and set aside for now: correctly
+   restricting a Keychain item to a specific unattended script via
+   CLI-only tooling (no code-signed app identity, no entitlements setup
+   in this environment) does not reliably provide isolation beyond what
+   file permissions already give — any process running as the same user
+   invoking the same interpreter can typically still reach it — so it
+   would have been a false sense of stronger protection without actually
+   being stronger. Option B is auditable, standard, and verifiably
+   correct with the tests below; Option A remains a legitimate future
+   upgrade if the deployment environment later supports proper per-binary
+   ACLs (e.g., a signed, notarized launch agent).
+4. **Tests added** (`test/checkpoint-store.test.js`, 7 new tests): correct
+   passphrase loads and signs successfully; missing passphrase fails
+   closed; wrong passphrase fails closed; passphrase-via-file works;
+   unencrypted keys still load unchanged (no regression); no decrypted
+   plaintext copy is ever written to disk as a side effect of resolving
+   the key; production issuance stays disabled regardless of a usable
+   signing key existing. All passing, alongside the full existing suite
+   (185/185).
+5. **G3 remains CONDITIONAL PASS.** No final production key has been
+   generated under the corrected mechanism — this correction explicitly
+   stops before that step, per the steward's own instruction: **"Do not
+   generate the final production key until separately instructed after
+   this correction is accepted."**
+
+**No secret material was committed, logged, or exposed in chat** at any
+point in either the original ceremony or this correction. The retired
+key's plaintext checksum
+(`d2b9520fb40d2ce0aace5c1267d6e3748a9af13e767fb3a201750fa68b724097`)
+remains recorded above purely as historical audit evidence that a
+specific, now-destroyed file once existed and was tested — it identifies
+nothing about the key's content and the file it describes no longer
+exists.
+
+### 8.6 Remaining human action, once a new ceremony is authorized
+
+When separately instructed to proceed: generate a new Ed25519 keypair
+(§7.4's ceremony, unchanged), encrypt it directly to its permanent
+passphrase-protected PKCS8 form (`openssl pkcs8 -topk8 -v2 aes-256-cbc`,
+run by the human, in the human's own terminal — this agent still has no
+hidden-input channel and will still stop at exactly this step), place the
+encrypted operational copy where the authoritative writer's environment
+can reach it via `TII_CHECKPOINT_PRIVATE_KEY_FILE` +
+`TII_CHECKPOINT_KEY_PASSPHRASE_FILE` (or the env-var equivalents), and
+produce a second, separately-encrypted recovery copy in a genuinely
+separate location, exactly as §7.3/§7.4 already describe — nothing about
+the ceremony's generation or recovery steps changes, only the operational
+copy's storage format.

@@ -48,6 +48,18 @@
       "stop_condition_triggered": true,
       "stop_reason": "no hidden passphrase input channel available to the agent; ceremony's own sections 6/13 require human takeover at exactly this boundary",
       "gate_changed": "G3 remains CONDITIONAL_PASS (progress recorded; not yet PASS)"
+    },
+    {
+      "date": "2026-09-12",
+      "trigger": "steward audit correction: the plain-PEM-plus-FileVault operational-copy design in the entry above did NOT satisfy the approved custody model (\"encrypted private signing key\") -- caught before any further step",
+      "correction": "key 1b96b82d535afc95 retired as ceremony/test-only, never promoted; its plaintext copy securely overwritten and removed; public key + test results preserved as audit evidence",
+      "code_change": "src/checkpoint-store.js resolveSigningKey() extended to accept a passphrase-encrypted PKCS8 PEM via TII_CHECKPOINT_KEY_PASSPHRASE(_FILE), failing closed on missing/wrong passphrase; no change to Ed25519, JCS, key IDs, or checkpoint format; unencrypted test keys unaffected",
+      "new_tests": 7,
+      "test_suite_after": "185/185 passing",
+      "new_production_key_generated": false,
+      "stop_condition_triggered": true,
+      "stop_reason": "steward explicitly instructed: do not generate the final production key until separately instructed after this correction is accepted",
+      "gate_changed": "G3 remains CONDITIONAL_PASS (unchanged status, corrected mechanism, no key exists under the corrected design yet)"
     }
   ],
 
@@ -114,7 +126,7 @@
     "registrar_actual": "Vercel Registrar (decision H superseded by explicit steward instruction; reasoning and the resulting registrar/hosting coupling trade-off recorded honestly in spec/resolver-domain-decision.md sections 15/17)",
     "iana_registry_status": "CLEAR (tii absent -- re-checked live this phase)",
     "iana_draft_completeness": "COMPLETE on technical fields, Contact/Change Controller (Naoto Fujie), and now Specification URL (https://transition-ignition-id.org/spec, live and verified); role email remains open",
-    "key_custody_model": "two-copy: operational (plain PEM, filesystem permissions 0600 + host FileVault disk encryption, since the live resolveSigningKey() has no passphrase-decryption step and must read unattended) + offline recovery (passphrase-encrypted via openssl pkcs8, human-mediated only). Key GENERATED 2026-09-12 (Ed25519, key_id 1b96b82d535afc95); operational placement and recovery-copy encryption+offline placement are HUMAN ACTION REQUIRED, not yet confirmed.",
+    "key_custody_model": "two-copy: operational (passphrase-encrypted PKCS8 PEM, decrypted only in-process via TII_CHECKPOINT_KEY_PASSPHRASE(_FILE) -- corrected 2026-09-12 from an earlier plain-PEM-plus-FileVault design that did not satisfy the approved 'encrypted key' requirement) + offline recovery (separately passphrase-encrypted via openssl pkcs8, human-mediated only, different location from the operational copy). Ceremony key 1b96b82d535afc95 (generated 2026-09-12) is RETIRED -- test/ceremony only, never promoted, plaintext securely removed. No production key exists under the corrected mechanism yet; generation is deferred pending separate authorization.",
     "governance_models_presented": ["Model A: individual Change Controller", "Model B: organization Change Controller, P/A Institute as operating name if legally accurate"],
     "governance_model_chosen": "Model A (individual Change Controller)",
     "governance_legal_accountable_name": "Naoto Fujie",
@@ -134,8 +146,9 @@
     "resolver_base_url_live": "https://transition-ignition-id.org",
     "tiiarchive_vercel_app_status": "non-canonical mirror, still reachable, self-reports the new domain as its own resolver_base",
     "production_key_generation_authorized": true,
-    "production_key_generated": true,
-    "production_key_id": "1b96b82d535afc95",
+    "production_key_generated": false,
+    "production_key_generation_note": "a ceremony key (1b96b82d535afc95) was generated 2026-09-12 under a custody design later found not to satisfy the approved model; it was retired (never promoted, plaintext securely removed) and generation under the corrected passphrase-encrypted mechanism is deferred pending separate authorization -- see key_custody_model above",
+    "retired_ceremony_test_key_id": "1b96b82d535afc95",
     "production_key_operational_copy_placed": false,
     "production_key_offline_recovery_copy_confirmed": false,
     "iana_submission_authorized_conditionally": true
@@ -164,7 +177,7 @@
   },
 
   "final_closure_table": [
-    { "gate": "G3", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": true, "blocker": "key generated (1b96b82d535afc95) and tested, but encryption/offline-recovery-copy placement requires the human operator directly -- the agent has no hidden-input channel for the passphrase and cannot itself place a copy in a genuinely separate location", "next_irreversible_action": "human operator encrypts the recovery copy (openssl pkcs8), places it in a separate location, moves the operational copy into its permanent home, and confirms back" },
+    { "gate": "G3", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": true, "blocker": "corrected custody mechanism now implemented and tested (passphrase-encrypted PKCS8 key loading, src/checkpoint-store.js), but no production key has been generated under it -- the prior ceremony key (1b96b82d535afc95) was retired for not satisfying the approved model; generation is deferred pending separate authorization", "next_irreversible_action": "once separately authorized: run the key-generation ceremony again, this time encrypting the operational copy directly (human enters the passphrase in their own terminal), place it and a separately-located recovery copy, confirm back" },
     { "gate": "G7", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- transition-ignition-id.org purchased via Vercel Registrar 2026-09-12, independently verified (Vercel CLI + live RDAP), DNS/HTTPS/resolver-base/all public routes confirmed live, see spec/resolver-domain-decision.md sections 16-18" },
     { "gate": "G8", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- resolved via explicit human confirmation, see spec/human-decisions.md" },
     { "gate": "G9", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": ["I"], "external_action_required": true, "blocker": "Specification URL open (depends on domain registration); fresh IANA re-check required immediately before submission", "next_irreversible_action": "submit the provisional registration once G7 (domain) resolves and a fresh IANA check is performed" },
@@ -197,7 +210,7 @@
 
   "blockers_remaining": [
     "G9 IANA: registration not submitted; submission conditionally authorized. Specification URL is now live and resolved; role email (standards@/security@/registry@transition-ignition-id.org) is not yet created (pending, requires separate authorization). Requires one fresh IANA registry re-check immediately before actual submission.",
-    "G3 key custody: production signing key (Ed25519, key_id 1b96b82d535afc95) was generated and passed signing/verification/tamper tests 2026-09-12, but the encrypted offline recovery copy has not yet been placed in a genuinely separate location, and the operational copy has not yet been moved to its permanent home -- both require the human operator directly (agent has no hidden-input channel for the passphrase step).",
+    "G3 key custody: the corrected custody mechanism (passphrase-encrypted PKCS8 key loading via TII_CHECKPOINT_KEY_PASSPHRASE(_FILE), src/checkpoint-store.js) is implemented and tested (7 new tests, 185/185 overall). No production key exists under it -- a prior ceremony key (1b96b82d535afc95) was generated and tested 2026-09-12 but retired after the steward found its custody design (plain PEM + FileVault) did not satisfy the approved 'encrypted key' model. Generation of a new key under the corrected mechanism is deferred pending separate authorization, per explicit instruction.",
     "TII_PRODUCTION_ISSUANCE_ENABLED is not set to 'true' anywhere in the committed configuration, and no override was made by this task.",
     "TII_GOVERNANCE_APPROVED and TII_RESOLVER_APPROVED (the software-level production-gate flags) remain unset even though the underlying G7/G8 launch gates are now PASS -- these are a deliberate separate switch, not automatically derived, so production issuance stays blocked by src/production-gate.js regardless of gate-table status."
   ],
@@ -225,6 +238,9 @@
     "private_key_in_git": false,
     "private_key_in_vercel": false,
     "private_key_printed_or_logged": false,
-    "second_root_key_accidentally_generated": false
+    "second_root_key_accidentally_generated": false,
+    "custody_requirement_silently_redefined": false,
+    "retired_key_promoted_to_production": false,
+    "final_production_key_generated_without_separate_authorization": false
   }
 }

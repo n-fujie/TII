@@ -576,3 +576,39 @@ DISABLED.** No private key was committed, logged, printed, or exposed in
 chat; no passphrase was typed or invented by this agent; no second root
 key was accidentally generated (baseline search confirmed no prior key
 existed anywhere on the system before this ceremony ran).
+
+## G3 custody audit correction (2026-09-12, same day) — key retired, mechanism fixed
+
+The steward caught, correctly, that the design just recorded above did
+**not** satisfy the approved custody model. "Encrypted private signing
+key" and "plain PEM protected by disk encryption" are not the same
+guarantee — FileVault protects the disk while locked; the key is
+plaintext on a running, unlocked host, which the authoritative writer
+requires. This was not silently redefined; it was caught and corrected:
+
+- **Key `1b96b82d535afc95` retired** — ceremony/test key only, never
+  promoted, never used for a real checkpoint. Plaintext securely
+  overwritten and removed. Public key + test results preserved as
+  non-secret audit evidence.
+- **`src/checkpoint-store.js` `resolveSigningKey()` corrected** — now
+  supports a passphrase-encrypted PKCS8 key via
+  `TII_CHECKPOINT_KEY_PASSPHRASE(_FILE)`, failing closed (never throws)
+  on a missing or wrong passphrase. No change to Ed25519, JCS, key IDs,
+  or the checkpoint format. 7 new tests; full suite 185/185.
+- **No new production key generated.** Per explicit instruction, this
+  agent stops here — generation under the corrected mechanism awaits
+  separate authorization.
+
+### Updated picture
+
+```
+G3  Production key custody   CONDITIONAL PASS  (mechanism corrected and tested; no key exists under it yet)
+G7  Permanent resolver        PASS
+G8  Governance                 PASS
+G9  IANA                       CONDITIONAL PASS
+G13 Release artifacts          PASS
+```
+
+**Overall launch status: still NOT READY.** **Production issuance remains
+DISABLED.** The custody requirement was not weakened to make G3 easier to
+pass — if anything, the bar just got stricter and more honestly stated.

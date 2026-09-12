@@ -108,6 +108,18 @@ no-server workflow uses.
   environments like Vercel where only env vars are available) or
   `TII_CHECKPOINT_PRIVATE_KEY_FILE` (a path to a PEM file, for local/test
   use). If neither is set, it returns `null` — **it never generates a key**.
+- **The PEM may be passphrase-encrypted** (`-----BEGIN ENCRYPTED PRIVATE
+  KEY-----`) — the production custody correction added in
+  `spec/production-key-custody.md` §8.5. When it is, a passphrase MUST also
+  resolve via `TII_CHECKPOINT_KEY_PASSPHRASE` (text) or
+  `TII_CHECKPOINT_KEY_PASSPHRASE_FILE` (a file path, e.g. a mounted secret),
+  or `resolveSigningKey()` returns `null` — an encrypted key is never
+  attempted without a passphrase, and a wrong passphrase also resolves to
+  `null` rather than throwing. Unencrypted PEMs (every test/disposable key
+  in this codebase's own test suite) are unaffected and load exactly as
+  before — the passphrase step only engages when the key itself is
+  encrypted. The decrypted key is held only in process memory (re-exported
+  to a plain PEM string in memory) and is never written back to disk.
 - **If no signing key is configured: reads continue** (`tii checkpoint
   verify`, `tii status`, `GET /status`, `GET /checkpoint/verify`, and the
   Audit page all work and correctly report `MISSING`/`UNVERIFIED` as
