@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-12T00:00:00.000Z",
-  "commit": "f00ecab",
-  "note": "Machine-readable launch status. G8 (governance) moved from UNRESOLVED to PASS via explicit human confirmation captured in spec/human-decisions.md (C/D/E/F all resolved to Naoto Fujie as the accountable individual and IANA/Change-Controller contact, P/A Institute retained as the public operating name) -- not inferred, not assumed from silence. G13 (release artifacts) moved from CONDITIONAL_PASS to PASS via the steward's explicit written acceptance of the TII 1.0 Production Candidate bundle, which does not declare TII 1.0 final and does not authorize production issuance, key generation, domain registration, or IANA submission. No gate was marked PASS merely because more documentation now exists or because artifacts were regenerated -- both moves required an explicit human decision. See spec/production-launch-gate.md and spec/external-infrastructure-closure.md for the full G1-G14 narrative and spec/human-decisions.md for the decision trail.",
+  "generated_at": "2026-09-12T13:00:00.000Z",
+  "commit": "acc8127",
+  "note": "Machine-readable launch status. G8 (governance) moved UNRESOLVED->PASS via explicit human confirmation (Naoto Fujie, spec/human-decisions.md). G13 (release artifacts) moved CONDITIONAL_PASS->PASS via explicit steward acceptance of the TII 1.0 Production Candidate bundle. G7 (resolver) moved CONDITIONAL_PASS->PASS after the steward switched the approved registrar from Cloudflare to Vercel Registrar (superseding decision H), purchased transition-ignition-id.org themselves (Vercel's own CLI refused to execute the purchase non-interactively -- a third-party safeguard against agent-executed purchases, respected not bypassed), and this agent independently verified the result via two sources (Vercel CLI + live public RDAP) plus live checks of DNS, HTTPS, every required public route, and the resolver-base configuration -- not taken on the steward's report alone. No gate was marked PASS merely because more documentation exists or because a report was trusted without independent verification. See spec/production-launch-gate.md, spec/resolver-domain-decision.md sections 15-18, and spec/human-decisions.md for the full decision trail.",
 
   "overall_launch_status": "NOT_READY",
 
@@ -15,6 +15,21 @@
       "iana_tii_scheme": "absent -- clear",
       "stop_condition_triggered": false,
       "any_status_changed": false
+    },
+    {
+      "date": "2026-09-12",
+      "trigger": "steward reported domain purchase complete -- verified independently, not trusted on report alone",
+      "vercel_cli_domains_inspect": "registered, registrar Vercel, expires 2027-09-12, nameservers ns1/ns2.vercel-dns.com matching intended, attached to project tiiarchive",
+      "rdap_transition_ignition_id_org": "registered (errorCode null), registration event 2026-09-12T04:56:24Z, nameservers matching Vercel's report, status client-transfer-prohibited + add-period",
+      "dns_resolves": true,
+      "https_valid": true,
+      "resolver_base_confirmed_live": "https://transition-ignition-id.org (via GET /catalog.json on both the new domain and tiiarchive.vercel.app, byte-identical build)",
+      "public_routes_verified": ["/", "/registry", "/spec", "/audit", "/about", "/catalog.json", "/ja", "/tii/<known-test-token>", "/tii/<unknown-valid-token>", "/tii/<invalid-token>", "/admin"],
+      "tiiarchive_vercel_app_still_non_canonical": true,
+      "ledger_domain_occurrences": 0,
+      "ledger_unchanged": true,
+      "stop_condition_triggered": false,
+      "gate_changed": "G7 CONDITIONAL_PASS -> PASS"
     }
   ],
 
@@ -39,7 +54,8 @@
       "signing_ready",
       "checkpoint_current"
     ],
-    "admin_authenticated": "not applicable outside a live request; not evaluated here"
+    "admin_authenticated": "not applicable outside a live request; not evaluated here",
+    "note": "governance_approved and resolver_approved are deliberate TII_GOVERNANCE_APPROVED/TII_RESOLVER_APPROVED env-var flags in src/production-gate.js -- they do NOT auto-flip when G7/G8 (the human-facing launch gates) resolve in reality. Re-checked 2026-09-12 after the domain purchase: both remain false, unchanged, because no operator has set those specific env vars in the committed configuration. This is intentional -- real-world governance/domain resolution and the software's own strict activation switch are deliberately kept as two separate steps, exactly so gate resolution alone can never silently enable production issuance."
   },
 
   "gates": {
@@ -49,7 +65,7 @@
     "G4_signed_checkpoints": "PASS",
     "G5_writer_safety": "PASS",
     "G6_recovery_idempotency": "PASS",
-    "G7_resolver": "CONDITIONAL_PASS",
+    "G7_resolver": "PASS",
     "G8_governance": "PASS",
     "G9_iana": "CONDITIONAL_PASS",
     "G10_public_only_policy": "PASS",
@@ -62,7 +78,7 @@
   "legacy_fields_for_readability": {
     "production_issuance": "disabled",
     "identifier_profile": "ready",
-    "resolver": "approved_not_registered",
+    "resolver": "registered_and_verified",
     "iana": "not_submitted",
     "governance": "resolved",
     "signing": "not_generated",
@@ -76,9 +92,10 @@
     "domain_available_as_of_check": true,
     "fallback_domain": "tii-id.org",
     "fallback_conditional_on": "unperformed trademark/confusion clearance search",
-    "recommended_registrar": "Cloudflare Registrar",
+    "recommended_registrar": "Cloudflare Registrar (superseded 2026-09-12 -- see registrar_actual)",
+    "registrar_actual": "Vercel Registrar (decision H superseded by explicit steward instruction; reasoning and the resulting registrar/hosting coupling trade-off recorded honestly in spec/resolver-domain-decision.md sections 15/17)",
     "iana_registry_status": "CLEAR (tii absent -- re-checked live this phase)",
-    "iana_draft_completeness": "COMPLETE on technical fields and on Contact/Change Controller (both Naoto Fujie, resolved with G8); still INCOMPLETE on Specification URL (depends on domain registration, not yet executed)",
+    "iana_draft_completeness": "COMPLETE on technical fields, Contact/Change Controller (Naoto Fujie), and now Specification URL (https://transition-ignition-id.org/spec, live and verified); role email remains open",
     "key_custody_model": "two-copy: operational (encrypted file or OS secret store) + offline backup, different account/vendor from each other; no production key generated",
     "governance_models_presented": ["Model A: individual Change Controller", "Model B: organization Change Controller, P/A Institute as operating name if legally accurate"],
     "governance_model_chosen": "Model A (individual Change Controller)",
@@ -88,7 +105,16 @@
     "governance_relationship_to_pa_institute": "Individual operating publicly as P/A Institute",
     "domain_approved": "transition-ignition-id.org",
     "domain_registration_authorized": true,
-    "domain_actually_registered": false,
+    "domain_actually_registered": true,
+    "domain_registration_verified_independently": true,
+    "domain_registration_date": "2026-09-12",
+    "domain_expiration_date": "2027-09-12",
+    "domain_auto_renew": true,
+    "domain_purchase_price_usd": 8.49,
+    "domain_renewal_price_usd": 10.99,
+    "domain_attached_to_project": "tiiarchive",
+    "resolver_base_url_live": "https://transition-ignition-id.org",
+    "tiiarchive_vercel_app_status": "non-canonical mirror, still reachable, self-reports the new domain as its own resolver_base",
     "production_key_generation_authorized": false,
     "iana_submission_authorized_conditionally": true
   },
@@ -117,7 +143,7 @@
 
   "final_closure_table": [
     { "gate": "G3", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": ["F", "H"], "external_action_required": false, "blocker": "no production key exists", "next_irreversible_action": "generate the production key per the documented ceremony" },
-    { "gate": "G7", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": ["A", "B", "G"], "external_action_required": true, "blocker": "no domain purchased", "next_irreversible_action": "register transition-ignition-id.org via Cloudflare Registrar" },
+    { "gate": "G7", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- transition-ignition-id.org purchased via Vercel Registrar 2026-09-12, independently verified (Vercel CLI + live RDAP), DNS/HTTPS/resolver-base/all public routes confirmed live, see spec/resolver-domain-decision.md sections 16-18" },
     { "gate": "G8", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- resolved via explicit human confirmation, see spec/human-decisions.md" },
     { "gate": "G9", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": ["I"], "external_action_required": true, "blocker": "Specification URL open (depends on domain registration); fresh IANA re-check required immediately before submission", "next_irreversible_action": "submit the provisional registration once G7 (domain) resolves and a fresh IANA check is performed" },
     { "gate": "G13", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- accepted via explicit steward decision 2026-09-12, see spec/human-decisions.md and spec/production-launch-gate.md's G13 closure note" }
@@ -148,10 +174,10 @@
   },
 
   "blockers_remaining": [
-    "G7 resolver: domain (transition-ignition-id.org) and registrar (Cloudflare Registrar) approved, registration authorized, but not yet actually registered -- requires the human operator's own action (this agent has no registrar account or payment method).",
-    "G9 IANA: registration not submitted; submission conditionally authorized but blocked on actual domain registration, a stable specification URL (depends on the domain), and role email (also depends on the domain). Requires one fresh IANA registry re-check immediately before actual submission.",
+    "G9 IANA: registration not submitted; submission conditionally authorized. Specification URL is now live and resolved; role email (standards@/security@/registry@transition-ignition-id.org) is not yet created (pending, requires separate authorization). Requires one fresh IANA registry re-check immediately before actual submission.",
     "G3 key custody: no production signing key has been generated, backed up, or distributed to accountable custodians yet -- the two-copy model, generation ceremony, and key-loss model are all documented and the code path is ready, but the key does not exist.",
-    "TII_PRODUCTION_ISSUANCE_ENABLED is not set to 'true' anywhere in the committed configuration, and no override was made by this task."
+    "TII_PRODUCTION_ISSUANCE_ENABLED is not set to 'true' anywhere in the committed configuration, and no override was made by this task.",
+    "TII_GOVERNANCE_APPROVED and TII_RESOLVER_APPROVED (the software-level production-gate flags) remain unset even though the underlying G7/G8 launch gates are now PASS -- these are a deliberate separate switch, not automatically derived, so production issuance stays blocked by src/production-gate.js regardless of gate-table status."
   ],
 
   "confirmations": {
@@ -168,6 +194,9 @@
     "external_witness_falsely_claimed": false,
     "production_issuance_disabled": true,
     "release_artifacts_declared_final_without_steward_acceptance": false,
-    "technical_content_altered_to_obtain_acceptance": false
+    "technical_content_altered_to_obtain_acceptance": false,
+    "domain_purchase_report_trusted_without_independent_verification": false,
+    "agent_executed_domain_purchase_directly": false,
+    "vercel_platform_purchase_safeguard_bypassed": false
   }
 }

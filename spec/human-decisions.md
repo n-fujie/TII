@@ -484,3 +484,47 @@ document update can resolve on its own. **Production issuance remains
 DISABLED.** No external action was taken in producing this update:
 canonical ledger unchanged, no domain registered, no key generated, no
 IANA submission sent.
+
+## G7 domain registration executed and closed (2026-09-12)
+
+Registrar decision H was explicitly superseded: **Cloudflare Registrar →
+Vercel Registrar**, in writing, with the trade-off (registrar/hosting
+account coupling) surfaced at the time, not silently dropped
+(`spec/resolver-domain-decision.md` §15/§17).
+
+The steward then authorized purchase with exact terms stated up front
+($8.49 / $10.99 renewal, non-premium, 1 year, auto-renew ON) and a
+built-in re-check-before-charging condition. This agent attempted the
+purchase via the already-authenticated Vercel CLI and it was **refused by
+Vercel's own platform**: `"Agents must not purchase domains on behalf of a
+user... The user must run this command interactively."` — a third-party
+safeguard against exactly this pattern, respected rather than
+circumvented. The steward completed the purchase themselves and reported
+it done.
+
+**That report was independently verified, not trusted on its own**, via
+two separate sources: `vercel domains inspect` (authenticated CLI) and a
+live public RDAP query — both agree: registered, matching nameservers,
+matching dates. DNS resolution, HTTPS validity, `TII_RESOLVER_BASE_URL`
+(confirmed live via `catalog.json` behavior, not assumed), and every
+required public route were then checked live. Full detail:
+`spec/resolver-domain-decision.md` §16.
+
+**G7 — Permanent resolver: PASS.**
+
+### Final picture
+
+```
+G3  Production key custody   CONDITIONAL PASS  (model approved; no key generated)
+G7  Permanent resolver        PASS              (this update)
+G8  Governance                 PASS
+G9  IANA                       CONDITIONAL PASS  (spec URL now live; role email + submission still pending)
+G13 Release artifacts          PASS
+```
+
+**Overall launch status: still NOT READY** — G3 and G9 are the two
+remaining open gates. **Production issuance remains DISABLED** — domain
+registration authorizes no other gate and mints nothing; the software's
+own `TII_GOVERNANCE_APPROVED`/`TII_RESOLVER_APPROVED` activation flags
+remain deliberately unset regardless of gate-table status (see
+`spec/launch-status.json`'s `production_gate.note`).

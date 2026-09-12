@@ -252,6 +252,11 @@ reimplementing it.
 
 ## §G7 — Permanent resolver domain
 
+> **Status at original writing: no domain purchased.** Since resolved to
+> PASS — see the G7 closure note appended at the end of this document and
+> `spec/resolver-domain-decision.md` §15–§18 for the registrar change,
+> the purchase, and full independent verification.
+
 **No domain purchased. No DNS changed.** Live RDAP re-check performed
 2026-09-11 (this phase), method validated against a known-registered
 control domain (`example.org`, confirmed to return live registration data
@@ -536,7 +541,7 @@ non-promotion tests.
 | G4 — Signed checkpoints | **PASS** |
 | G5 — Writer safety | **PASS** |
 | G6 — Recovery/idempotency | **PASS** |
-| G7 — Resolver | **CONDITIONAL PASS** |
+| G7 — Resolver | **PASS** *(resolved 2026-09-12 — see the closure note appended at the end of this document)* |
 | G8 — Governance | **PASS** *(resolved 2026-09-11 — see the closure note appended at the end of this document)* |
 | G9 — IANA | **CONDITIONAL PASS** |
 | G10 — Public-only policy | **PASS** |
@@ -552,9 +557,9 @@ section was originally written, five did not: G3 (no production key
 generated yet — procedure ready), G7 (no domain purchased — candidates
 confirmed available today), G8 (governance legal identity genuinely
 unresolved — not guessed), G9 (IANA not submitted, pending G7/G8), and G13
-(release artifacts complete but pending steward acceptance). **G8 and G13
-have since resolved — see the closure notes at the end of this
-document.** Three now do not: G3, G7, G9. **There is still no automatic
+(release artifacts complete but pending steward acceptance). **G8, G13,
+and G7 have since resolved — see the closure notes at the end of this
+document.** Two now do not: G3, G9. **There is still no automatic
 launch.** This
 document prepares TII for issuance. It does not authorize it.
 
@@ -665,3 +670,44 @@ cross-reference fix, not a reopening of any accepted content.
 status off NOT READY.** Those three remain CONDITIONAL PASS for the
 reasons already recorded above and in `spec/launch-status.json`.
 **Production issuance remains DISABLED.**
+
+---
+
+## G7 closure (appended 2026-09-12) — G7: CONDITIONAL PASS → PASS
+
+The steward changed the approved registrar from Cloudflare Registrar to
+**Vercel Registrar** (superseding decision H — full reasoning and the
+honest registrar/hosting-coupling trade-off this creates:
+`spec/resolver-domain-decision.md` §15/§17), then purchased
+`transition-ignition-id.org` themselves, directly, after Vercel's own CLI
+explicitly refused to execute the purchase non-interactively
+("Agents must not purchase domains on behalf of a user") — a third-party
+platform safeguard against exactly the autonomous-agent-purchase pattern
+this whole exchange had to navigate, respected rather than routed around.
+
+**The completion report was independently verified, not taken on trust**,
+via two separate sources agreeing: `vercel domains inspect` (authenticated
+CLI) and a live RDAP query against the public registry
+(`rdap.publicinterestregistry.org`, independent of Vercel). Both confirm
+registration, matching nameservers, and matching dates. Full verification
+detail — DNS resolution, HTTPS validity, every required public route
+(`/`, `/registry`, `/spec`, `/audit`, `/about`, `/catalog.json`, `/ja`,
+known/unknown/invalid `/tii/<token>`, and a confirmatory `/admin` 404),
+the `TII_RESOLVER_BASE_URL` confirmation (via live `catalog.json` behavior
+on both the new domain and the legacy `tiiarchive.vercel.app`, which
+still works and correctly self-reports the new domain as its own resolver
+base rather than claiming canonical status itself), and the identity
+invariants (zero occurrences of the domain string in the ledger, ledger
+byte-for-byte unchanged, the one identifier still `identifier_status:
+"test"`) — all in `spec/resolver-domain-decision.md` §16.
+
+**G7 — Permanent resolver: PASS.**
+
+**This does not change G3 or G9, and does not move overall launch status
+off NOT READY.** Both remain CONDITIONAL PASS. G9 specifically is now
+one step closer — a stable `/spec` URL exists
+(`https://transition-ignition-id.org/spec`) — but still requires role
+email, the remaining IANA governance-field entry, and a fresh IANA
+registry re-check immediately before any submission. **Production
+issuance remains DISABLED** — domain registration authorizes no other
+gate and mints nothing.

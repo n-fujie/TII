@@ -445,10 +445,137 @@ Unchanged in substance from §9 above; restated concretely for
   zero TII code or identifier changes — one environment variable, set once
   the domain is approved and configured.
 
-G7 remains **CONDITIONAL PASS**: the decision is now fully frozen (one
-recommended domain, one fallback, one recommended registrar, a complete
-authorization packet, and a DNS plan) — everything that can be prepared
-without an irreversible external action has been prepared. It becomes PASS
-only once a human explicitly authorizes registration and the domain is
-actually live and tested (`spec/production-launch-gate.md` §33, gated on
-authorization).
+G7 remains **CONDITIONAL PASS** as of §14: the decision was fully frozen
+(one recommended domain, one fallback, one recommended registrar, a
+complete authorization packet, and a DNS plan) — everything that could be
+prepared without an irreversible external action had been prepared. See
+§15 for the registrar change and §16 for the completed registration and
+G7's resolution to PASS.
+
+## 15. Registrar decision superseded (2026-09-12)
+
+The steward explicitly changed the approved registrar for
+`transition-ignition-id.org` from **Cloudflare Registrar** (§14.3) to
+**Vercel Registrar**, in writing, superseding decision H. Reasoning
+recorded at the time: the existing, already-authenticated Vercel
+account/team (`platoststems-projects`) already owns the live `tiiarchive`
+project, making direct domain-to-project attachment immediate with no
+separate DNS handoff step.
+
+**Before switching, this document's §8 caution was already on record:**
+"Do not register through Vercel even though it offers domains — it
+couples the domain account to the hosting account and adds an unnecessary
+transfer step." That reasoning was surfaced again at the moment of
+decision (not silently dropped) and the steward chose convenience and
+direct attachment over registrar/hosting independence — an explicit,
+informed trade-off, not an oversight. §17 below records the honest,
+resulting coupling.
+
+A live price check via the Vercel CLI (`vercel domains price
+transition-ignition-id.org`, run against the authenticated account, no
+purchase) confirmed ordinary, non-premium `.org` pricing: **$8.49
+purchase / $10.99 renewal / $17.99 transfer-out, 1-year term** — consistent
+with, and slightly below, the representative pricing range in §3/§14.2.
+
+## 16. Registration executed and independently verified (2026-09-12)
+
+Purchase was executed by the steward directly through the Vercel CLI
+(`vercel domains buy`), which — notably — **refused to run
+non-interactively**: `"Agents must not purchase domains on behalf of a
+user... The user must run this command interactively... to confirm price,
+auto-renew, and provide registrant contact details."` This is Vercel's own
+platform-level safeguard against agent-executed purchases; it was
+respected, not routed around. The steward then completed the purchase
+themselves and reported it done.
+
+**That report was not taken on trust.** Independent verification performed
+after the report, using two separate sources:
+
+| Check | Method | Result |
+|---|---|---|
+| Registrar-side registration | `vercel domains inspect transition-ignition-id.org` (authenticated CLI, already-established session) | Registered via Vercel, expires 2027-09-12, nameservers `ns1`/`ns2.vercel-dns.com` matching intended, attached to project `tiiarchive` |
+| Public registry confirmation | Live RDAP query (`rdap.publicinterestregistry.org`), independent of Vercel | `errorCode: null` (registered), registration event `2026-09-12T04:56:24Z`, nameservers matching Vercel's report exactly, status `client transfer prohibited` + `add period` (standard immediately-post-registration state) |
+
+Both sources agree, independently. **Registration is confirmed.**
+
+### DNS, HTTPS, and resolver configuration — verified live, not assumed
+
+- **DNS resolves:** `https://transition-ignition-id.org` loads the live
+  TII homepage.
+- **HTTPS is valid:** the page loaded over `https:` with no certificate
+  warning or navigation failure (a cert mismatch/expiry would have blocked
+  the load outright).
+- **`TII_RESOLVER_BASE_URL` is correctly set:** confirmed behaviorally,
+  not by reading the env var directly (this checkout isn't linked to the
+  Vercel project) — `GET /catalog.json` on **both**
+  `https://transition-ignition-id.org` and the legacy
+  `https://tiiarchive.vercel.app` report
+  `"resolver_base": "https://transition-ignition-id.org"`, and both serve
+  byte-identical content (`generated_at` timestamps match exactly) — this
+  is one static build, deployed once, correctly configured with the new
+  domain as its resolver base.
+- **All required public routes verified live:** `/`, `/registry`, `/spec`,
+  `/audit`, `/about`, `/catalog.json`, `/ja` all render correctly on the
+  new domain. `/tii/tii_h4r3jsn4p25d` (the known test identifier) resolves
+  with its full record; a syntactically-valid-but-unissued slug and a
+  syntactically-invalid slug both correctly return the static site's "Not
+  found" page (this deployment has no server-side routing to distinguish
+  400 from 404, unchanged prior finding — both are inert, non-canonical
+  outcomes either way). `GET /admin` also returns "Not found" — confirming,
+  again, that the static export exposes no admin/write surface on the new
+  domain.
+
+### `tiiarchive.vercel.app` — confirmed still explicitly non-canonical
+
+Still reachable (same project, second domain), still serves identical
+content, and **its own self-reported `resolver_base` names the new domain,
+not itself** — it does not claim to be canonical anywhere in its own
+output. This is the correct "old address remains a working mirror, new
+address is authoritative" pattern (§6 of `governance-candidate.md`),
+achieved automatically because both domains point at the same single
+Vercel project and the same single build.
+
+### Identity invariants — reconfirmed empirically
+
+- **No TII identifier contains the domain:** `grep -c
+  "transition-ignition-id" data/ledger.jsonl` → `0`.
+- **Canonical ledger byte-for-byte unchanged:** md5 `fb56b2a4a2f5fe134f3fa23e2186e7d1`,
+  head hash `eb27a2b7a557465b1301e7225052d03b6fc1550caa7b9ea943e5e90835427e95`,
+  event count `10` — identical before and after this entire registration
+  process, confirmed by direct local inspection (`git status --porcelain`
+  shows no change to `data/ledger.jsonl`).
+- **All existing identifiers remain test-only:** the sole identifier,
+  `tii:h4r3jsn4p25d`, still reports `identifier_status: "test"` on the live
+  site and in the local ledger alike.
+- **Production issuance remains DISABLED:** unaffected by any of the above
+  — domain registration is an infrastructure change, not a gate-bypassing
+  one; `TII_PRODUCTION_ISSUANCE_ENABLED` was not touched.
+
+## 17. Honest note: registrar/hosting coupling now exists
+
+Because the registrar was switched to Vercel specifically, `§8`'s original
+caution is now a live, accepted fact rather than an avoided risk: the
+domain account and the hosting account are the same account
+(`platoststems-projects`). This does **not** affect TII identifier
+identity (the invariants in §16 above hold regardless of who owns the
+domain), but it does mean an eventual registrar-independent transfer would
+now require an *extra* step (moving the domain out from under the same
+account as hosting) that choosing Cloudflare would have avoided. Recorded
+here plainly, not minimized — this was a known, named trade-off at the
+time of decision (§15), not a surprise.
+
+## 18. G7 status: PASS (2026-09-12)
+
+Every G7 acceptance condition (`spec/production-launch-gate.md` §19) is
+now independently verified true: domain registered (RDAP + Vercel, two
+sources), DNS under intended control (nameservers match), HTTPS works,
+stable resolver routes work, stable `/spec` URL exists, resolver
+configuration uses the approved domain (verified via live `catalog.json`
+on two hosts), Vercel remains non-canonical (self-reports the new domain,
+not itself), identifier tokens remain domain-independent (zero
+occurrences), hosting replacement remains conceptually possible (the
+`TII_RESOLVER_BASE_URL` mechanism is unchanged — only registrar/hosting
+account unification per §17 is new), and no production issuance was
+enabled by any of this.
+
+**G7 — Permanent resolver: PASS.**

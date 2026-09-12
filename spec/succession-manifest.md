@@ -67,21 +67,38 @@
 
 ## 5. Resolver-domain operational dependencies
 
-- **Permanent domain:** not registered. Two candidates cleared for
-  availability as of 2026-09-11 (`spec/resolver-domain-decision.md`, and the
-  same-day live RDAP re-check in `spec/production-launch-gate.md` §G7):
-  `transition-ignition-id.org` (brand-safety primary) and `tii-id.org`
-  (secondary, conditional on a trademark clearance search not yet
-  performed).
-- **Current interim endpoint:** `tiiarchive.vercel.app`, a Vercel static
-  deployment. **Not canonical, not identity-bearing** — the identifier
-  contains no hostname (`spec/identifier-syntax-1.0-candidate.md` §9); this
-  endpoint is replaceable at any time by redeploying the static export
-  anywhere and does not need to be preserved for succession.
+- **Permanent domain: REGISTERED (2026-09-12).**
+  `transition-ignition-id.org`, registrar **Vercel Registrar** (not
+  Cloudflare — decision H was explicitly superseded; reasoning and the
+  resulting registrar/hosting coupling recorded in
+  `spec/resolver-domain-decision.md` §15/§17), expires 2026-09-12→2027-09-12,
+  auto-renew **ON**. Attached directly to the `tiiarchive` Vercel project.
+  Registration independently verified via live RDAP, not taken on the
+  registrant's report alone (`spec/resolver-domain-decision.md` §16).
+  `tii-id.org` was never registered and is no longer a live candidate —
+  the decision is closed.
+- **Domain is now the canonical designated resolver.**
+  `https://transition-ignition-id.org` serves the full public site (`/`,
+  `/registry`, `/spec`, `/audit`, `/about`, `/catalog.json`, `/ja`,
+  `/tii/<token>`), verified live.
+- **`tiiarchive.vercel.app` remains a working, explicitly non-canonical
+  mirror** — same project, same build, still reachable, and its own
+  `catalog.json` self-reports `resolver_base` as the new domain rather
+  than itself. **Not identity-bearing** — the identifier contains no
+  hostname (`spec/identifier-syntax-1.0-candidate.md` §9); this endpoint
+  remains replaceable at any time and does not need to be preserved for
+  succession.
 - **Configuration dependency:** exactly one environment variable,
   `TII_RESOLVER_BASE_URL`, controls the resolver base everywhere in the
-  codebase (`spec/resolver-domain-decision.md` §7). A successor needs only
-  to set this variable and redeploy — no code change.
+  codebase (`spec/resolver-domain-decision.md` §7) — confirmed live and
+  correctly set to `https://transition-ignition-id.org` on the actual
+  deployment (observed via `catalog.json`, not merely assumed).
+- **Registrar/hosting coupling now exists** (honest note, unchanged from
+  `spec/resolver-domain-decision.md` §17): domain and hosting are under
+  the same Vercel account (`platoststems-projects`). This does not affect
+  TII identifier identity but does mean an eventual registrar-independent
+  transfer would need an extra step it wouldn't have needed under
+  Cloudflare.
 
 ## 6. Registrar recovery requirements
 
@@ -157,15 +174,17 @@ updated in the future.
 
 | Question | Current answer |
 |---|---|
-| Who controls the domain? | **Nobody yet — no domain is registered** (`spec/resolver-domain-decision.md` §14). Once registered, this must be filled in with the registrant/controller from `spec/governance-finalization.md` §6. |
-| Who can transfer the domain? | Same as above — not yet applicable. |
+| Who controls the domain? | **The Vercel account/team `platoststems-projects`** (registrar: Vercel Registrar, registered 2026-09-12 — `spec/resolver-domain-decision.md` §16). This is an infrastructure-account fact, not a legal-identity one; it does not by itself establish who has ultimate authority over that account — that traces to the same governance identity resolved in `spec/governance-finalization.md` §3/§6 (Naoto Fujie). |
+| Who can transfer the domain? | Whoever controls the `platoststems-projects` Vercel account — same answer as above. Outbound EPP transfer is supported (Vercel quotes a transfer price, `spec/resolver-domain-decision.md` §15), so the domain is not locked to Vercel permanently. |
 | Who controls IANA Change Controller updates? | **Nobody yet — nothing is registered with IANA.** Once registered, the accountable party is whoever `spec/governance-finalization.md` §3/§6 resolves to (Model A individual or Model B entity). |
 | Who controls the public specification? | The current steward (P/A Institute, candidate — `spec/governance-candidate.md`), via the source repository (`https://github.com/n-fujie/TII`). |
 | Who holds the signing key? | **Nobody — no production signing key exists** (`spec/production-key-custody.md`). |
 | Who holds the offline key backup? | Not applicable — see above. |
 
-Every row above reading "nobody yet" is an honest statement of current
-state, not a gap in this manifest — see
+The domain rows above were updated 2026-09-12 following independent
+verification of the registration (`spec/resolver-domain-decision.md`
+§16); the remaining rows reading "nobody yet" (signing key) are an honest
+statement of current state, not a gap in this manifest — see
 `spec/production-launch-gate.md`'s Final Closure Table for exactly what
 remains before each can be filled in.
 
