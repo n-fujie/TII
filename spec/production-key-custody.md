@@ -274,12 +274,95 @@ never hidden; further production mutations are blocked via the
 touching already-written history. **Policy frozen, unchanged, reconfirmed
 working.**
 
-### 7.7 G3 status
+### 7.7 G3 status (as of the prior phase)
 
-**CONDITIONAL PASS**, unchanged from the prior phase. The custody model,
-storage-option comparison, generation ceremony, key-loss model, and
-signing-failure policy are now all fully specified and (where testable
-without a real key) verified. **No production key exists.** G3 becomes
-PASS only once a real key is generated per §7.4, stored per §7.3, and its
-custody record is entered into `spec/succession-manifest.md` — none of
-which this task performs.
+**CONDITIONAL PASS.** The custody model, storage-option comparison,
+generation ceremony, key-loss model, and signing-failure policy were all
+fully specified and (where testable without a real key) verified. **No
+production key existed.** See §8 for the ceremony that has since run.
+
+## 8. Key ceremony executed (2026-09-12)
+
+The human operator gave explicit authorization for key generation
+(J: NOT AUTHORIZED → AUTHORIZED). The ceremony ran using the existing,
+unmodified `generateKeypair()`/`keyId()` functions from `src/checkpoint.js`
+— no new key format was invented.
+
+### 8.1 What was generated and verified
+
+- **Algorithm:** Ed25519 (no substitute algorithm needed or used).
+- **Key identifier:** `1b96b82d535afc95` (first 16 hex chars of
+  SHA-256 over the SPKI DER of the public key — the existing, unchanged
+  derivation in `src/checkpoint.js` `keyId()`).
+- **Public key SHA-256:** `0bd0868ad0dd146e1046e1c7ad9de7d3a3e8b33901ae9e214f918c203b20d8d7`
+  (a fingerprint of the PEM text itself, for out-of-band cross-checking;
+  distinct from the key identifier above, which fingerprints the DER).
+- **Signing test:** PASS — the key signed a test checkpoint against a
+  disposable test ledger (never the canonical ledger).
+- **Verification test:** PASS — the signature verified correctly, and the
+  resolved `key_id` matched.
+- **Tamper tests (4/4 correctly rejected):** altering the attested head
+  hash, event count, checkpoint timestamp, and checkpoint body (spec
+  version) each independently caused verification to fail with
+  `bad-signature` — exactly the required behavior.
+- **Environment:** generated on the operator's own persistent local
+  machine (confirmed not ephemeral — a real, named Mac with FileVault
+  full-disk encryption enabled), not inside the public Vercel deployment,
+  not in a static-build environment, not in a browser, not through any
+  third-party key-generation service.
+- **Canonical ledger:** untouched — the sign/verify/tamper tests ran
+  against a disposable ledger created under the OS temp directory and
+  deleted immediately after.
+
+### 8.2 The passphrase boundary — genuine, not a formality
+
+This agent has **no mechanism for hidden input** — every Bash command it
+runs, and every argument in it, is visible in its own output. Per the
+ceremony's own rule ("if an interactive hidden passphrase prompt is
+available, use it; otherwise STOP and request human takeover... do not
+invent a passphrase automatically"), the agent generated the raw keypair
+(which needs no passphrase) and the plaintext private key was written,
+restrictively permissioned (`0600`, directory `0700`), to a staging
+location **outside the git repository**
+(`~/.tii-production-key-ceremony/`) — then the agent stopped and handed
+the encryption step to the human operator, exactly as required.
+
+### 8.3 Operational vs. recovery copy — a resolved design tension, stated plainly
+
+The custody model calls for an *encrypted* operational copy, but the
+**existing, unmodified** `resolveSigningKey()` in `src/checkpoint-store.js`
+reads a plain PKCS8 PEM file directly — it has no passphrase-decryption
+step, and adding one would be a code change this ceremony does not make.
+Rather than silently ignore this gap or silently modify accepted code,
+it is resolved as follows, and recorded here so it is never assumed away:
+
+- **Operational copy:** stored as a plain PEM file, protected by
+  filesystem permissions (`0600`, owner-only) and the host's full-disk
+  encryption (FileVault, confirmed **On** on the generation machine) —
+  "encrypted at rest" via the disk, not a per-read passphrase, because the
+  automated checkpoint-signing process must be able to read it
+  unattended, exactly matching how `resolveSigningKey()` already works.
+- **Recovery copy:** passphrase-encrypted (`openssl pkcs8 -topk8 -v2
+  aes-256-cbc`, a standard, auditable, non-invented format), because it is
+  **not** read automatically — a human is always present when an actual
+  disaster-recovery decryption happens, so a passphrase prompt there costs
+  nothing operationally and adds real protection for a copy that, by
+  design, is not sitting behind the same host's disk encryption.
+
+### 8.4 What remains — human action required (§13 of the ceremony)
+
+**G3 remains CONDITIONAL PASS.** Per the ceremony's own rule: it becomes
+PASS only once the human confirms the independent, separately-located
+encrypted recovery copy exists. The exact remaining steps (recovery-copy
+encryption, its placement in a genuinely separate location, and moving
+the plaintext into its permanent operational home) were handed to the
+human operator with exact commands and a checksum to verify against —
+see the ceremony's final report for the precise instructions. This agent
+did not, and structurally cannot, perform the passphrase-entry or
+physical/logical offline-placement steps itself.
+
+**No secret material was committed, logged, or exposed in chat.** The
+plaintext staging file's SHA-256 (`d2b9520fb40d2ce0aace5c1267d6e3748a9af13e767fb3a201750fa68b724097`)
+is recorded here only so the human can confirm, after encrypting, that
+the bytes that went into the encrypted copies match what was actually
+generated — this checksum reveals nothing about the key's content.

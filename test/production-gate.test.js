@@ -442,3 +442,46 @@ test('§0 no HTTP route exposes production issuance', () => {
   assert.ok(!/production-issuance/.test(serverSrc), 'src/server.js must not import src/production-issuance.js in this phase');
   assert.ok(!/identifier_status.*production|production.*identifier_status/.test(serverSrc), 'no HTTP route should be able to set identifier_status to "production"');
 });
+
+/* --------------------------------------------- G3 key ceremony: secret-path exclusion --- */
+
+test('G3 permanent regression: no PEM private-key material exists anywhere in the git-tracked repository', () => {
+  const { execFileSync } = require('child_process');
+  const repoRoot = path.join(__dirname, '..');
+  const tracked = execFileSync('git', ['ls-files'], { cwd: repoRoot, encoding: 'utf8' })
+    .split('\n')
+    .filter(Boolean);
+  const offenders = [];
+  for (const rel of tracked) {
+    const full = path.join(repoRoot, rel);
+    let content;
+    try {
+      content = fs.readFileSync(full, 'utf8');
+    } catch {
+      continue; // binary or unreadable file -- not a PEM
+    }
+    // a real PEM private key block has actual base64 body lines, not just the
+    // words "BEGIN PRIVATE KEY" appearing in prose (this repo's own docs
+    // legitimately reference that string as text -- see
+    // spec/phase1-adversarial-verification.md and spec/production-key-custody.md)
+    if (/-----BEGIN (EC |RSA |ENCRYPTED )?PRIVATE KEY-----\n[A-Za-z0-9+/=]{20,}/.test(content)) {
+      offenders.push(rel);
+    }
+  }
+  assert.deepEqual(offenders, [], 'no tracked file may contain an actual PEM private-key block (documentation may still mention the header text as a string)');
+});
+
+test('G3: .gitignore excludes checkpoint/key/lock/journal material (unchanged, reconfirmed)', () => {
+  const gitignore = fs.readFileSync(path.join(__dirname, '..', '.gitignore'), 'utf8');
+  for (const pattern of ['checkpoints/', '*.private.pem', '*.lock', '*.journal']) {
+    assert.ok(gitignore.includes(pattern), `.gitignore must still exclude ${pattern}`);
+  }
+});
+
+test('G3: the production gate in the real repository is still closed after any key-ceremony work (production issuance stays disabled regardless of key existence elsewhere on disk)', () => {
+  const status = gate.computeGateStatus({
+    ledgerFile: path.join(__dirname, '..', 'data', 'ledger.jsonl'),
+    env: process.env,
+  });
+  assert.equal(status.available, false, 'the production gate must remain closed under the committed repository configuration regardless of any key material that may exist outside the repo');
+});

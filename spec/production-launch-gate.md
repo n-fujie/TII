@@ -146,6 +146,13 @@ confirmed structurally (`src/server.js` does not import
 
 ## §G3 — Cryptographic key custody: documented, not executed
 
+> **Status at original writing: no key generated.** A key ceremony has
+> since run (2026-09-12) — key generated, signing/verification/tamper
+> tests all passed. **G3 remains CONDITIONAL PASS**, pending the human
+> operator's confirmation of independent offline recovery-copy placement.
+> See the G3 ceremony note appended at the end of this document and
+> `spec/production-key-custody.md` §8 for full detail.
+
 Full model: `spec/production-key-custody.md`. Summary: five things kept
 distinct (private key / public key / key id / checkpoint records /
 rotation metadata); private key never committed, never in the ledger,
@@ -711,3 +718,58 @@ email, the remaining IANA governance-field entry, and a fresh IANA
 registry re-check immediately before any submission. **Production
 issuance remains DISABLED** — domain registration authorizes no other
 gate and mints nothing.
+
+---
+
+## G3 key ceremony executed, human action pending (appended 2026-09-12)
+
+The human operator gave explicit authorization for production key
+generation (J: NOT AUTHORIZED → AUTHORIZED). A ceremony then ran, reusing
+the existing, unmodified `generateKeypair()`/`keyId()` from
+`src/checkpoint.js` — no new key format invented, per §3/§10 of the
+ceremony's own instructions.
+
+**Generated and verified:** Ed25519 keypair, key identifier
+`1b96b82d535afc95`. Signing test PASS, verification test PASS, all 4
+tamper tests (altered head hash / event count / timestamp / body) correctly
+rejected with `bad-signature`. All tests ran against a disposable test
+ledger, deleted immediately after — the canonical ledger was never
+touched. Generation happened on the operator's own persistent local
+machine (confirmed non-ephemeral; FileVault full-disk encryption
+confirmed On), never inside the public Vercel deployment, a static-build
+environment, a browser, or any third-party service.
+
+**A genuine, structural stop was hit at the encryption step — not a
+formality.** This agent has no channel for hidden input: every command it
+runs is visible in its own output, so it cannot itself type a passphrase
+without that passphrase appearing in the transcript, and it was explicitly
+instructed not to invent one. Per the ceremony's own rule, the raw
+keypair was generated (no passphrase needed for that step), the plaintext
+private key was written — restrictively permissioned, outside the git
+repository entirely — and the agent **stopped**, handing the passphrase
+entry and the offline-recovery-copy placement to the human operator, with
+exact commands and a checksum to verify against. Full detail, including
+the honest resolution of a real design tension (the operational copy must
+stay plaintext-on-disk because the existing `resolveSigningKey()` has no
+passphrase-decryption step and reading it unattended is required for
+automated checkpoint signing — protected instead by filesystem permissions
+plus confirmed FileVault disk encryption, while the recovery copy, which
+is only ever human-mediated, is passphrase-encrypted):
+`spec/production-key-custody.md` §8.
+
+**No secret material was committed, logged, or exposed in chat.** A
+secret-scan of the entire git-tracked repository found no PEM private-key
+material (two prose mentions of the string "BEGIN PRIVATE KEY" in
+existing audit documents, not actual key bytes) — now a permanent
+regression test (`test/production-gate.test.js`, "G3 permanent
+regression: no PEM private-key material...").
+
+**G3 remains CONDITIONAL PASS** — per the ceremony's own acceptance
+conditions, it becomes PASS only once the human confirms the independent,
+separately-located encrypted recovery copy actually exists, which this
+agent cannot itself perform or verify by proxy. **This does not change
+G7, G8, G9, or G13, and does not move overall launch status off NOT
+READY.** **Production issuance remains DISABLED** — key generation
+authorizes no other gate and mints nothing; the software's own
+`TII_PRODUCTION_ISSUANCE_ENABLED`/`TII_GOVERNANCE_APPROVED`/
+`TII_RESOLVER_APPROVED` flags remain unset regardless.

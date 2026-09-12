@@ -1,7 +1,7 @@
 {
-  "generated_at": "2026-09-12T13:00:00.000Z",
-  "commit": "acc8127",
-  "note": "Machine-readable launch status. G8 (governance) moved UNRESOLVED->PASS via explicit human confirmation (Naoto Fujie, spec/human-decisions.md). G13 (release artifacts) moved CONDITIONAL_PASS->PASS via explicit steward acceptance of the TII 1.0 Production Candidate bundle. G7 (resolver) moved CONDITIONAL_PASS->PASS after the steward switched the approved registrar from Cloudflare to Vercel Registrar (superseding decision H), purchased transition-ignition-id.org themselves (Vercel's own CLI refused to execute the purchase non-interactively -- a third-party safeguard against agent-executed purchases, respected not bypassed), and this agent independently verified the result via two sources (Vercel CLI + live public RDAP) plus live checks of DNS, HTTPS, every required public route, and the resolver-base configuration -- not taken on the steward's report alone. No gate was marked PASS merely because more documentation exists or because a report was trusted without independent verification. See spec/production-launch-gate.md, spec/resolver-domain-decision.md sections 15-18, and spec/human-decisions.md for the full decision trail.",
+  "generated_at": "2026-09-12T13:15:00.000Z",
+  "commit": "eb0f1a5",
+  "note": "Machine-readable launch status. G8 (governance) moved UNRESOLVED->PASS via explicit human confirmation (Naoto Fujie, spec/human-decisions.md). G13 (release artifacts) moved CONDITIONAL_PASS->PASS via explicit steward acceptance of the TII 1.0 Production Candidate bundle. G7 (resolver) moved CONDITIONAL_PASS->PASS after independent verification (Vercel CLI + live RDAP) of a domain purchase the operator completed themselves, after Vercel's own CLI refused to execute it non-interactively. G3 (key custody): a key ceremony ran 2026-09-12 (generation + signing/verification/tamper tests, all passing) but G3 remains CONDITIONAL_PASS -- this agent structurally cannot type a passphrase or place an offline recovery copy (no hidden-input channel exists in its tools), so it stopped and handed those two steps to the human operator with exact commands and a checksum, per the ceremony's own explicit STOP rule. No gate was marked PASS merely because more documentation exists, a report was trusted without independent verification, or a security boundary was worked around. See spec/production-launch-gate.md, spec/resolver-domain-decision.md sections 15-18, spec/production-key-custody.md section 8, and spec/human-decisions.md for the full decision trail.",
 
   "overall_launch_status": "NOT_READY",
 
@@ -30,6 +30,24 @@
       "ledger_unchanged": true,
       "stop_condition_triggered": false,
       "gate_changed": "G7 CONDITIONAL_PASS -> PASS"
+    },
+    {
+      "date": "2026-09-12",
+      "trigger": "explicit human authorization for G3 production key generation (J: NOT AUTHORIZED -> AUTHORIZED)",
+      "algorithm": "ed25519",
+      "key_id": "1b96b82d535afc95",
+      "public_key_pem_sha256": "0bd0868ad0dd146e1046e1c7ad9de7d3a3e8b33901ae9e214f918c203b20d8d7",
+      "signing_test": "PASS",
+      "verification_test": "PASS",
+      "tamper_tests_correctly_rejected": "4/4 (head_hash, event_count, created_at, spec_version)",
+      "generation_environment": "operator's persistent local machine, FileVault full-disk encryption confirmed On, not ephemeral, not Vercel, not a browser",
+      "canonical_ledger_touched": false,
+      "secret_scan_of_git_tracked_repo": "clean -- no PEM private-key material found (2 prose mentions of the string only), now a permanent regression test",
+      "passphrase_entry_performed_by": "human operator -- agent has no hidden-input channel and was explicitly instructed not to invent a passphrase",
+      "offline_recovery_copy_placement": "HUMAN ACTION REQUIRED -- not yet confirmed",
+      "stop_condition_triggered": true,
+      "stop_reason": "no hidden passphrase input channel available to the agent; ceremony's own sections 6/13 require human takeover at exactly this boundary",
+      "gate_changed": "G3 remains CONDITIONAL_PASS (progress recorded; not yet PASS)"
     }
   ],
 
@@ -96,7 +114,7 @@
     "registrar_actual": "Vercel Registrar (decision H superseded by explicit steward instruction; reasoning and the resulting registrar/hosting coupling trade-off recorded honestly in spec/resolver-domain-decision.md sections 15/17)",
     "iana_registry_status": "CLEAR (tii absent -- re-checked live this phase)",
     "iana_draft_completeness": "COMPLETE on technical fields, Contact/Change Controller (Naoto Fujie), and now Specification URL (https://transition-ignition-id.org/spec, live and verified); role email remains open",
-    "key_custody_model": "two-copy: operational (encrypted file or OS secret store) + offline backup, different account/vendor from each other; no production key generated",
+    "key_custody_model": "two-copy: operational (plain PEM, filesystem permissions 0600 + host FileVault disk encryption, since the live resolveSigningKey() has no passphrase-decryption step and must read unattended) + offline recovery (passphrase-encrypted via openssl pkcs8, human-mediated only). Key GENERATED 2026-09-12 (Ed25519, key_id 1b96b82d535afc95); operational placement and recovery-copy encryption+offline placement are HUMAN ACTION REQUIRED, not yet confirmed.",
     "governance_models_presented": ["Model A: individual Change Controller", "Model B: organization Change Controller, P/A Institute as operating name if legally accurate"],
     "governance_model_chosen": "Model A (individual Change Controller)",
     "governance_legal_accountable_name": "Naoto Fujie",
@@ -115,7 +133,11 @@
     "domain_attached_to_project": "tiiarchive",
     "resolver_base_url_live": "https://transition-ignition-id.org",
     "tiiarchive_vercel_app_status": "non-canonical mirror, still reachable, self-reports the new domain as its own resolver_base",
-    "production_key_generation_authorized": false,
+    "production_key_generation_authorized": true,
+    "production_key_generated": true,
+    "production_key_id": "1b96b82d535afc95",
+    "production_key_operational_copy_placed": false,
+    "production_key_offline_recovery_copy_confirmed": false,
     "iana_submission_authorized_conditionally": true
   },
 
@@ -142,7 +164,7 @@
   },
 
   "final_closure_table": [
-    { "gate": "G3", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": ["F", "H"], "external_action_required": false, "blocker": "no production key exists", "next_irreversible_action": "generate the production key per the documented ceremony" },
+    { "gate": "G3", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": true, "blocker": "key generated (1b96b82d535afc95) and tested, but encryption/offline-recovery-copy placement requires the human operator directly -- the agent has no hidden-input channel for the passphrase and cannot itself place a copy in a genuinely separate location", "next_irreversible_action": "human operator encrypts the recovery copy (openssl pkcs8), places it in a separate location, moves the operational copy into its permanent home, and confirms back" },
     { "gate": "G7", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- transition-ignition-id.org purchased via Vercel Registrar 2026-09-12, independently verified (Vercel CLI + live RDAP), DNS/HTTPS/resolver-base/all public routes confirmed live, see spec/resolver-domain-decision.md sections 16-18" },
     { "gate": "G8", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- resolved via explicit human confirmation, see spec/human-decisions.md" },
     { "gate": "G9", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": ["I"], "external_action_required": true, "blocker": "Specification URL open (depends on domain registration); fresh IANA re-check required immediately before submission", "next_irreversible_action": "submit the provisional registration once G7 (domain) resolves and a fresh IANA check is performed" },
@@ -175,7 +197,7 @@
 
   "blockers_remaining": [
     "G9 IANA: registration not submitted; submission conditionally authorized. Specification URL is now live and resolved; role email (standards@/security@/registry@transition-ignition-id.org) is not yet created (pending, requires separate authorization). Requires one fresh IANA registry re-check immediately before actual submission.",
-    "G3 key custody: no production signing key has been generated, backed up, or distributed to accountable custodians yet -- the two-copy model, generation ceremony, and key-loss model are all documented and the code path is ready, but the key does not exist.",
+    "G3 key custody: production signing key (Ed25519, key_id 1b96b82d535afc95) was generated and passed signing/verification/tamper tests 2026-09-12, but the encrypted offline recovery copy has not yet been placed in a genuinely separate location, and the operational copy has not yet been moved to its permanent home -- both require the human operator directly (agent has no hidden-input channel for the passphrase step).",
     "TII_PRODUCTION_ISSUANCE_ENABLED is not set to 'true' anywhere in the committed configuration, and no override was made by this task.",
     "TII_GOVERNANCE_APPROVED and TII_RESOLVER_APPROVED (the software-level production-gate flags) remain unset even though the underlying G7/G8 launch gates are now PASS -- these are a deliberate separate switch, not automatically derived, so production issuance stays blocked by src/production-gate.js regardless of gate-table status."
   ],
@@ -197,6 +219,12 @@
     "technical_content_altered_to_obtain_acceptance": false,
     "domain_purchase_report_trusted_without_independent_verification": false,
     "agent_executed_domain_purchase_directly": false,
-    "vercel_platform_purchase_safeguard_bypassed": false
+    "vercel_platform_purchase_safeguard_bypassed": false,
+    "passphrase_typed_by_agent": false,
+    "passphrase_invented_by_agent": false,
+    "private_key_in_git": false,
+    "private_key_in_vercel": false,
+    "private_key_printed_or_logged": false,
+    "second_root_key_accidentally_generated": false
   }
 }

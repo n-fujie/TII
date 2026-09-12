@@ -528,3 +528,51 @@ registration authorizes no other gate and mints nothing; the software's
 own `TII_GOVERNANCE_APPROVED`/`TII_RESOLVER_APPROVED` activation flags
 remain deliberately unset regardless of gate-table status (see
 `spec/launch-status.json`'s `production_gate.note`).
+
+## J: production key generation — NOT AUTHORIZED → AUTHORIZED → GENERATED (2026-09-12)
+
+The human operator gave explicit authorization: **J = YES — AUTHORIZED.**
+A ceremony ran, reusing the existing `generateKeypair()`/`keyId()` from
+`src/checkpoint.js` — no new key format. Result:
+
+```
+Algorithm:                Ed25519
+Key identifier:            1b96b82d535afc95
+Public key SHA-256:        0bd0868ad0dd146e1046e1c7ad9de7d3a3e8b33901ae9e214f918c203b20d8d7
+Signing test:               PASS
+Verification test:          PASS
+Tamper tests (4/4):         correctly rejected (head hash, event count, timestamp, body)
+Canonical ledger touched:   NO
+Generation environment:     operator's persistent local machine, FileVault On, not ephemeral
+```
+
+**A genuine stop was hit at the encryption step, not a formality.** This
+agent has no hidden-input channel — every command it runs is visible in
+its own output — and was explicitly told not to invent a passphrase. It
+generated the raw keypair (no passphrase needed for that), wrote the
+plaintext private key to a restrictively-permissioned staging location
+**outside the git repository**, and stopped, handing the passphrase-entry
+and offline-recovery-copy placement to the human operator with exact
+commands and a checksum. **J: AUTHORIZED → GENERATED.** Not yet
+"EXECUTED" in the full custody sense — that requires the human's
+confirmation, per the ceremony's own rule.
+
+**Secret-scan of the entire git-tracked repository: clean** — no PEM
+private-key material found; now a permanent regression test
+(`test/production-gate.test.js`).
+
+### Updated picture
+
+```
+G3  Production key custody   CONDITIONAL PASS  (key generated + tested 2026-09-12; custody placement pending human action)
+G7  Permanent resolver        PASS
+G8  Governance                 PASS
+G9  IANA                       CONDITIONAL PASS
+G13 Release artifacts          PASS
+```
+
+**Overall launch status: still NOT READY.** **Production issuance remains
+DISABLED.** No private key was committed, logged, printed, or exposed in
+chat; no passphrase was typed or invented by this agent; no second root
+key was accidentally generated (baseline search confirmed no prior key
+existed anywhere on the system before this ceremony ran).
