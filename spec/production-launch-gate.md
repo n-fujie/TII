@@ -550,7 +550,7 @@ non-promotion tests.
 | G6 — Recovery/idempotency | **PASS** |
 | G7 — Resolver | **PASS** *(resolved 2026-09-12 — see the closure note appended at the end of this document)* |
 | G8 — Governance | **PASS** *(resolved 2026-09-11 — see the closure note appended at the end of this document)* |
-| G9 — IANA | **CONDITIONAL PASS** |
+| G9 — IANA | **PENDING IANA** *(submitted 2026-09-13 — see the closure note appended at the end of this document)* |
 | G10 — Public-only policy | **PASS** |
 | G11 — Security | **PASS** |
 | G12 — Reconstruction/succession | **PASS** |
@@ -566,8 +566,9 @@ confirmed available today), G8 (governance legal identity genuinely
 unresolved — not guessed), G9 (IANA not submitted, pending G7/G8), and G13
 (release artifacts complete but pending steward acceptance). **G8, G13,
 G7, and G3 have since resolved — see the closure notes at the end of this
-document.** One now does not: G9. **There is still no automatic
-launch.** This
+document.** One now does not: G9 — submitted to IANA 2026-09-13, now
+PENDING IANA, not yet PASS (submission is not registration). **There is
+still no automatic launch.** This
 document prepares TII for issuance. It does not authorize it.
 
 ---
@@ -863,3 +864,45 @@ CONDITIONAL PASS, untouched — no IANA submission occurred in this task).
 **Remaining non-PASS launch gate: G9 only. Overall launch status remains
 NOT READY** until G9 also resolves. **Production issuance remains
 DISABLED.**
+
+## G9 submission recorded (appended 2026-09-13) — G9: CONDITIONAL PASS → PENDING IANA
+
+Prerequisites resolved first: the canonical public specification
+(`https://transition-ignition-id.org/spec`) was extended with the
+RFC 7595-required Fragment handling, Interoperability, Security, and
+Privacy Considerations sections (the last citing
+`spec/public-only-1.0.md`, no new normative rule), plus Change Controller
+and Contact — independently re-fetched live and confirmed after
+deployment. Contact/Change Controller were then corrected, per steward
+decision, from a not-yet-operational custom-domain role mailbox to the
+existing stable address: **Naoto Fujie `<platodesign@icloud.com>`** —
+also independently re-verified live. A fresh IANA registry check,
+immediately before preparing the submission, found `tii` still absent —
+no conflict.
+
+The human steward then submitted the provisional registration request
+via the official form (`https://www.iana.org/form/protocol-assignment`):
+
+```
+Submission date:        2026-09-13
+Requested scheme:       tii
+Requested status:       Provisional
+Registry:               Uniform Resource Identifier (URI) Schemes
+Contact:                Naoto Fujie <platodesign@icloud.com>
+Change Controller:      Naoto Fujie <platodesign@icloud.com>, operating publicly as P/A Institute
+Specification:          https://transition-ignition-id.org/spec
+IANA acknowledgment:    ACKNOWLEDGMENT PENDING
+```
+
+**Submission is not registration.** `tii` does not yet appear in the
+official registry. **G9: PENDING IANA** — not PASS. G9 becomes PASS only
+once the official IANA URI Schemes Registry is independently re-checked
+and visibly contains `tii` under the expected Provisional status; an
+acknowledgment, ticket, or confirmation email is not sufficient by
+itself.
+
+No ledger mutation, no identifier-syntax change, no production issuance.
+G3, G7, G8, G13 untouched (all remain PASS).
+
+**Remaining non-PASS launch gate: G9 (PENDING IANA). Overall launch
+status remains NOT READY. Production issuance remains DISABLED.**

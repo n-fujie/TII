@@ -706,3 +706,38 @@ clear, Contact/Change Controller resolved, Specification URL live and
 RFC 7595-complete). **G9 remains CONDITIONAL PASS** — PASS still requires
 human submission of the provisional registration (not yet performed) and
 its actual appearance in the IANA registry.
+
+## I: IANA submission — AUTHORIZED → SUBMITTED (2026-09-13, same day)
+
+The human steward submitted the provisional `tii` URI scheme registration
+via `https://www.iana.org/form/protocol-assignment`.
+
+```
+Submission date:        2026-09-13
+Requested scheme:       tii
+Requested status:       Provisional
+Registry:               Uniform Resource Identifier (URI) Schemes
+Contact:                Naoto Fujie <platodesign@icloud.com>
+Change Controller:      Naoto Fujie <platodesign@icloud.com>, operating publicly as P/A Institute
+Specification:          https://transition-ignition-id.org/spec
+IANA acknowledgment:    ACKNOWLEDGMENT PENDING
+Expected processing:    approximately 1-2 days (IANA's own estimate)
+```
+
+**Submission is not registration.** `tii` does not yet appear in the
+official IANA URI Schemes registry.
+
+```
+G3  Production key custody   PASS
+G7  Permanent resolver       PASS
+G8  Governance               PASS
+G9  IANA                     PENDING IANA
+G13 Release artifacts        PASS
+```
+
+**G9: PENDING IANA — not PASS.** PASS requires the official registry to
+be independently re-checked and found to actually contain `tii` under
+Provisional status; an acknowledgment, ticket, or confirmation email is
+not sufficient by itself. **Overall launch status: still NOT READY.
+Production issuance remains DISABLED.** G3/G7/G8/G13 were not reopened;
+the canonical ledger was not modified.

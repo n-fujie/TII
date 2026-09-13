@@ -389,3 +389,32 @@ lodge the request themselves, then record the submission per the
 **G9 remains CONDITIONAL PASS** until: (1) the human submits, and (2)
 `tii` actually appears in the IANA registry under this registration —
 submission alone does not make G9 PASS.
+
+### Submission recorded (2026-09-13) — G9: CONDITIONAL PASS → PENDING IANA
+
+The human steward submitted the request above via
+`https://www.iana.org/form/protocol-assignment`.
+
+```
+Submission date:        2026-09-13
+Requested scheme:       tii
+Requested status:       Provisional
+Registry:               Uniform Resource Identifier (URI) Schemes
+Contact:                Naoto Fujie <platodesign@icloud.com>
+Change Controller:      Naoto Fujie <platodesign@icloud.com>, operating publicly as P/A Institute
+Specification:          https://transition-ignition-id.org/spec
+IANA acknowledgment:    ACKNOWLEDGMENT PENDING
+Expected processing:    approximately 1-2 days (per IANA's own estimate at submission time)
+```
+
+**Submission is not registration.** `tii` does not yet appear in the
+official IANA registry — this was true at the moment of submission and
+remains the operative fact until independently re-checked and found
+otherwise.
+
+**G9: PENDING IANA.** Next action, once IANA responds: verify the
+response, then independently re-check
+`https://www.iana.org/assignments/uri-schemes/uri-schemes.xhtml` for an
+actual `tii` entry with the expected Provisional status. **G9 becomes
+PASS only then** — an acknowledgment email, a ticket number, or a
+confirmation receipt are each insufficient by themselves.

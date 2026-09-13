@@ -104,6 +104,23 @@
       "g3_g7_g8_g13_reopened": false,
       "stop_condition_triggered": "role email requires human account creation/payment -- agent stopped and handed exact next action",
       "gate_changed": "G9 remains CONDITIONAL_PASS (one of two prerequisites for the stable-specification/role-email path now resolved; role email pending human action)"
+    },
+    {
+      "date": "2026-09-13",
+      "trigger": "steward contact decision correction, final registry re-check, and IANA submission",
+      "contact_corrected_to": "Naoto Fujie <platodesign@icloud.com> (custom-domain role mailbox deferred, not a prerequisite)",
+      "spec_page_recheck": "https://transition-ignition-id.org/spec independently re-fetched live after the contact correction -- confirmed Contact now reads platodesign@icloud.com",
+      "final_iana_registry_recheck": "tii absent, 0 exact matches, 0 near matches -- no conflict",
+      "human_submitted": true,
+      "submission_date": "2026-09-13",
+      "iana_acknowledgment": "ACKNOWLEDGMENT PENDING",
+      "official_registry_contains_tii": false,
+      "ledger_touched": false,
+      "identifier_syntax_touched": false,
+      "production_issuance_enabled": false,
+      "g3_g7_g8_g13_reopened": false,
+      "stop_condition_triggered": false,
+      "gate_changed": "G9 CONDITIONAL_PASS -> PENDING_IANA"
     }
   ],
 
@@ -141,7 +158,7 @@
     "G6_recovery_idempotency": "PASS",
     "G7_resolver": "PASS",
     "G8_governance": "PASS",
-    "G9_iana": "CONDITIONAL_PASS",
+    "G9_iana": "PENDING_IANA",
     "G10_public_only_policy": "PASS",
     "G11_security": "PASS",
     "G12_reconstruction_succession": "PASS",
@@ -153,7 +170,7 @@
     "production_issuance": "disabled",
     "identifier_profile": "ready",
     "resolver": "registered_and_verified",
-    "iana": "not_submitted",
+    "iana": "submitted_2026-09-13_pending_registry_publication",
     "governance": "resolved",
     "signing": "generated_active_for_checkpoint_signing_key_1486de6152baec7f",
     "writer": "ready",
@@ -197,7 +214,22 @@
     "retired_ceremony_test_key_ids": ["1b96b82d535afc95", "46b11023f849e931"],
     "production_key_operational_copy_placed": true,
     "production_key_offline_recovery_copy_confirmed": true,
-    "iana_submission_authorized_conditionally": true
+    "iana_submission_authorized_conditionally": true,
+    "iana_submission": {
+      "status": "SUBMITTED",
+      "submission_date": "2026-09-13",
+      "requested_scheme": "tii",
+      "requested_status": "Provisional",
+      "registry": "Uniform Resource Identifier (URI) Schemes",
+      "contact": "Naoto Fujie <platodesign@icloud.com>",
+      "change_controller": "Naoto Fujie <platodesign@icloud.com>, operating publicly as P/A Institute",
+      "specification": "https://transition-ignition-id.org/spec",
+      "iana_acknowledgment": "ACKNOWLEDGMENT PENDING",
+      "expected_processing_time": "approximately 1-2 days (IANA's own estimate at submission time)",
+      "submission_treated_as_registration": false,
+      "official_registry_contains_tii": false,
+      "next_action": "verify IANA's response when it arrives, then independently re-check the official registry before marking G9 PASS"
+    }
   },
 
   "identifiers": {
@@ -226,7 +258,7 @@
     { "gate": "G3", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- final key 1486de6152baec7f generated 2026-09-13, ACTIVE FOR CHECKPOINT SIGNING, independently verified end to end by the agent; see spec/production-key-custody.md section 8.7. Does not enable production issuance." },
     { "gate": "G7", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- transition-ignition-id.org purchased via Vercel Registrar 2026-09-12, independently verified (Vercel CLI + live RDAP), DNS/HTTPS/resolver-base/all public routes confirmed live, see spec/resolver-domain-decision.md sections 16-18" },
     { "gate": "G8", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- resolved via explicit human confirmation, see spec/human-decisions.md" },
-    { "gate": "G9", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": ["I"], "external_action_required": true, "blocker": "all preparatory prerequisites resolved (Contact/Change Controller: Naoto Fujie <platodesign@icloud.com>; Specification URL live and complete) -- only human SUBMIT decision and actual IANA registry publication remain", "next_irreversible_action": "human submits the provisional registration via https://www.iana.org/form/protocol-assignment using the field values in spec/iana-provisional-registration.md's corrected submission packet (human-submitted, not automated)" },
+    { "gate": "G9", "status": "PENDING_IANA", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": "submitted to IANA 2026-09-13 (Provisional, tii, via https://www.iana.org/form/protocol-assignment); submission is not registration -- tii does not yet appear in the official registry", "next_irreversible_action": "once IANA responds: verify the response, then independently re-check https://www.iana.org/assignments/uri-schemes/uri-schemes.xhtml for an actual tii entry under Provisional status. G9 becomes PASS only then." },
     { "gate": "G13", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- accepted via explicit steward decision 2026-09-12, see spec/human-decisions.md and spec/production-launch-gate.md's G13 closure note" }
   ],
 
@@ -255,7 +287,7 @@
   },
 
   "blockers_remaining": [
-    "G9 IANA: registration not submitted; submission conditionally authorized. Specification URL is live AND independently verified to contain all RFC 7595-required sections (2026-09-13). Contact/Change Controller corrected same day to Naoto Fujie <platodesign@icloud.com> -- a custom-domain role mailbox is deferred, not a prerequisite. All preparatory fields are now resolved; requires one fresh IANA registry re-check immediately before actual submission, then human submission via the official form.",
+    "G9 IANA: submitted 2026-09-13 (Provisional, tii, Contact/Change Controller Naoto Fujie <platodesign@icloud.com>, spec https://transition-ignition-id.org/spec). Submission is not registration -- tii does not yet appear in the official registry. G9 = PENDING IANA. Becomes PASS only once independently re-checked and found actually registered.",
     "TII_PRODUCTION_ISSUANCE_ENABLED is not set to 'true' anywhere in the committed configuration, and no override was made by this task.",
     "TII_GOVERNANCE_APPROVED and TII_RESOLVER_APPROVED (the software-level production-gate flags) remain unset even though the underlying G7/G8 launch gates are now PASS -- these are a deliberate separate switch, not automatically derived, so production issuance stays blocked by src/production-gate.js regardless of gate-table status."
   ],
@@ -290,6 +322,9 @@
     "final_production_key_generated_without_separate_authorization": false,
     "final_key_id_matches_either_retired_ceremony_key": false,
     "human_report_trusted_without_independent_verification": false,
-    "obsolete_retired_key_private_material_removed": true
+    "obsolete_retired_key_private_material_removed": true,
+    "iana_submission_treated_as_registration": false,
+    "iana_registry_independently_rechecked_after_submission": false,
+    "agent_submitted_iana_form": false
   }
 }
