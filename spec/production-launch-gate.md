@@ -544,7 +544,7 @@ non-promotion tests.
 |---|---|
 | G1 — Identifier syntax | **PASS** |
 | G2 — Production issuance isolation | **PASS** |
-| G3 — Key custody | **CONDITIONAL PASS** |
+| G3 — Key custody | **PASS** *(resolved 2026-09-13 — see the closure note appended at the end of this document)* |
 | G4 — Signed checkpoints | **PASS** |
 | G5 — Writer safety | **PASS** |
 | G6 — Recovery/idempotency | **PASS** |
@@ -565,8 +565,8 @@ generated yet — procedure ready), G7 (no domain purchased — candidates
 confirmed available today), G8 (governance legal identity genuinely
 unresolved — not guessed), G9 (IANA not submitted, pending G7/G8), and G13
 (release artifacts complete but pending steward acceptance). **G8, G13,
-and G7 have since resolved — see the closure notes at the end of this
-document.** Two now do not: G3, G9. **There is still no automatic
+G7, and G3 have since resolved — see the closure notes at the end of this
+document.** One now does not: G9. **There is still no automatic
 launch.** This
 document prepares TII for issuance. It does not authorize it.
 
@@ -811,3 +811,55 @@ this document should not have implied they were.
 **G3 remains CONDITIONAL PASS — unchanged status, corrected reasoning.**
 This does not change G7, G8, G9, or G13, and does not move overall launch
 status off NOT READY. **Production issuance remains DISABLED.**
+
+## G3 final closure (appended 2026-09-13) — G3: CONDITIONAL PASS → PASS
+
+The ceremony authorized after the correction above ran to completion,
+entirely in the human operator's own terminal. Full detail:
+`spec/production-key-custody.md` §8.7. Summary:
+
+- A second candidate key, `46b11023f849e931`, was generated correctly
+  (directly into encrypted PKCS8 form) but retired the same day — its
+  human-chosen passphrase was only 9 bytes, insufficient for a long-lived
+  production root key even though the *encryption mechanism itself* was
+  correct this time (this was a passphrase-strength issue, not a repeat
+  of the FileVault mistake above). Its private-key material (operational,
+  a re-encrypted copy, and its USB recovery copy) was securely removed;
+  only its non-secret public key remains as audit evidence.
+- **The final production key is `1486de6152baec7f`** — Ed25519, generated
+  directly into passphrase-encrypted PKCS8 form with a strong passphrase
+  from first creation. No plaintext private-key file ever existed on
+  disk. The agent independently re-derived its key ID from a copy of the
+  public key (never trusting the human's report alone) and independently
+  recomputed both the public-key SHA-256
+  (`8712c17570beaacf079e4909e36b3762f1a1163e0e2575d84d3130b5a97e4311`) and
+  the operational encrypted-key SHA-256
+  (`ad7d345fae18530da94a40b525b2e27510a85c1ea7f889358ef18832a9679a45`)
+  directly from the files on disk, both matching the human's report.
+- A separately-located USB recovery copy was independently confirmed
+  byte-identical (same SHA-256) by the agent reading the USB volume
+  directly. A recovery rehearsal (both a full sign/verify/tamper test run
+  against a disposable copy of the recovery file, and an independent
+  OpenSSL-only public-key equivalence proof) confirmed the recovery copy
+  reproduces the identical keypair.
+- The full sign → checkpoint → verify → tamper-4/4-rejected cycle passed,
+  run by the human against a disposable temp ledger only — the real
+  `data/ledger.jsonl` was never opened by any ceremony test, confirmed
+  unchanged throughout (10 events, same SHA-256 and head hash, before and
+  after).
+- No private-key or passphrase material exists in Git (permanent
+  regression test, still passing) or in Vercel (independently checked via
+  `vercel env ls` against the deployed `tiiarchive` project — the only
+  variable present is the unrelated `TII_RESOLVER_BASE_URL`).
+- Full test suite: 185/185 passing.
+
+**Key `1486de6152baec7f` is ACTIVE FOR CHECKPOINT SIGNING. G3 Production
+Key Custody: PASS.** This is a statement about checkpoint-signing
+authority only — it does **not** enable production TII issuance, which
+remains a separate, independently-gated condition and remains DISABLED.
+This does not change G7, G8, G13 (all PASS, untouched) or G9 (still
+CONDITIONAL PASS, untouched — no IANA submission occurred in this task).
+
+**Remaining non-PASS launch gate: G9 only. Overall launch status remains
+NOT READY** until G9 also resolves. **Production issuance remains
+DISABLED.**

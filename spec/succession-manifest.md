@@ -39,10 +39,12 @@
 ## 3. Latest known checkpoint
 
 - **Status: NONE EXIST.** No signed checkpoint has ever been created against
-  the committed canonical ledger — production issuance is disabled, no
-  production signing key has been generated (`spec/production-key-custody.md`),
-  and checkpoint creation was only ever exercised in this project's automated
-  tests, against disposable throwaway ledgers that are discarded when the
+  the committed canonical ledger — production issuance is disabled, and
+  although an active production signing key now exists (`1486de6152baec7f`,
+  `spec/production-key-custody.md` §8.7), it has never been configured
+  into any environment that reads the real ledger; checkpoint creation
+  was only ever exercised in this project's automated tests, against
+  disposable throwaway ledgers that are discarded when the
   test process exits.
 - **When one exists:** it will be a portable JSON file under `checkpoints/`
   (gitignored — never committed; see `spec/checkpoint-operation.md`), named
@@ -55,29 +57,37 @@
 
 ## 4. Public verification keys
 
-- **Status: NONE ACTIVE.** A ceremony key (`1b96b82d535afc95`, Ed25519)
-  was generated 2026-09-12 and passed all signing/verification/tamper
-  tests, but was **retired the same day** — its custody design (plain PEM
-  protected by filesystem permissions + host disk encryption) did not
-  satisfy the approved "encrypted private signing key" model. It was
-  never promoted, never used for a real checkpoint, and its plaintext
-  copy has been securely removed. Its public key and test results remain
-  as non-secret audit evidence only (`spec/production-key-custody.md`
-  §8.5) — **it must not be treated as, or later mistaken for, the
-  production signing authority.**
-- **Custody mechanism corrected, no key generated under it yet.**
-  `src/checkpoint-store.js` now supports loading a passphrase-encrypted
-  PKCS8 key (`TII_CHECKPOINT_KEY_PASSPHRASE(_FILE)`), tested (7 new
-  tests). Generating the actual production key under this corrected
-  mechanism is deferred pending separate authorization — per explicit
-  instruction, this agent does not generate it merely because the
-  mechanism now exists.
-- **When a key is finally generated and activated:** the public key will
-  be self-embedded in every checkpoint file it signs, and additionally
-  recorded (public key only, never the private key) in
-  `checkpoints/keyset.json` alongside its `key_id` and validity window.
-  This manifest must be updated again at that point with the real key's
-  identifier — not the retired one above.
+- **Status: ACTIVE.** Key ID **`1486de6152baec7f`** (Ed25519), generated
+  2026-09-13 by the human operator directly into passphrase-encrypted
+  PKCS8 form (no plaintext private-key file ever existed on disk), is the
+  production checkpoint-signing authority. Public key SHA-256:
+  `8712c17570beaacf079e4909e36b3762f1a1163e0e2575d84d3130b5a97e4311` —
+  independently recomputed by the agent from the file itself, not merely
+  taken from the human's report. Full ceremony record, including
+  independent verification of the operational file, the separately-held
+  USB recovery copy, and a recovery rehearsal: `spec/production-key-custody.md`
+  §8.7. **This is a statement about checkpoint-signing capability only —
+  it does not by itself enable production TII issuance**, which remains a
+  separate, independently-gated condition (`src/production-gate.js`) and
+  is currently DISABLED.
+- **Two earlier ceremony keys are permanently retired, never activated:**
+  - `1b96b82d535afc95` (generated 2026-09-12) — its custody design (plain
+    PEM protected by filesystem permissions + host disk encryption) did
+    not satisfy the approved "encrypted private signing key" model.
+  - `46b11023f849e931` (generated 2026-09-13) — generated correctly under
+    the corrected passphrase-encrypted-PKCS8 mechanism, but its
+    human-chosen passphrase was only 9 bytes, judged insufficient for a
+    long-lived production root key.
+  - Neither was ever used for a real checkpoint. Both had their
+    private-key material securely removed (best-effort overwrite —
+    not a cryptographic erasure guarantee on SSD/flash media); one
+    non-secret public key is retained per retired key as audit evidence.
+- **The active key's public key is self-embedded** in every checkpoint
+  file it signs, and additionally recorded (public key only, never the
+  private key) in `checkpoints/keyset.json` alongside its `key_id` and
+  validity window, once the first real checkpoint is created against the
+  committed ledger (see §3 above — none has been yet; only disposable
+  test ledgers have exercised signing so far).
 
 ## 5. Resolver-domain operational dependencies
 
@@ -192,15 +202,15 @@ updated in the future.
 | Who can transfer the domain? | Whoever controls the `platoststems-projects` Vercel account — same answer as above. Outbound EPP transfer is supported (Vercel quotes a transfer price, `spec/resolver-domain-decision.md` §15), so the domain is not locked to Vercel permanently. |
 | Who controls IANA Change Controller updates? | **Nobody yet — nothing is registered with IANA.** Once registered, the accountable party is whoever `spec/governance-finalization.md` §3/§6 resolves to (Model A individual or Model B entity). |
 | Who controls the public specification? | The current steward (P/A Institute, candidate — `spec/governance-candidate.md`), via the source repository (`https://github.com/n-fujie/TII`). |
-| Who holds the signing key? | **Nobody — no active production signing key exists.** A ceremony key (`1b96b82d535afc95`) was generated 2026-09-12 and retired the same day for not satisfying the approved custody model (`spec/production-key-custody.md` §8.5). A key generated under the corrected mechanism is pending separate authorization. |
-| Who holds the offline key backup? | **Not yet placed.** Requires the human operator to encrypt a recovery copy and move it to a genuinely separate location from the operational copy — see `spec/production-key-custody.md` §8.4 for the exact pending steps. |
+| Who holds the signing key? | **The human operator holds the passphrase to the active production key, `1486de6152baec7f`** (Ed25519, generated 2026-09-13 directly into passphrase-encrypted PKCS8 form — `spec/production-key-custody.md` §8.7). Two earlier ceremony keys (`1b96b82d535afc95`, `46b11023f849e931`) were generated and retired before this one, never activated. Active for checkpoint signing only — does not by itself enable production TII issuance. |
+| Who holds the offline key backup? | **The human operator**, on a physically separate USB device, independently confirmed byte-identical to the operational copy (SHA-256 `ad7d345fae18530da94a40b525b2e27510a85c1ea7f889358ef18832a9679a45`) by the agent reading the USB volume directly — `spec/production-key-custody.md` §8.7. Currently a single physical copy; if institutional (multi-person) succession is later required, a second geographically-separate recovery copy should be considered (see the bus-factor note below). |
 
 The domain rows above were updated 2026-09-12 following independent
 verification of the registration (`spec/resolver-domain-decision.md`
-§16); the remaining rows reading "nobody yet" (signing key) are an honest
-statement of current state, not a gap in this manifest — see
-`spec/production-launch-gate.md`'s Final Closure Table for exactly what
-remains before each can be filled in.
+§16); the signing-key rows were updated 2026-09-13 following the final
+key ceremony (`spec/production-key-custody.md` §8.7) — see
+`spec/production-launch-gate.md`'s Final Closure Table for the full
+gate-by-gate status.
 
 ## 12. Bus-factor audit (qualitative)
 
@@ -216,8 +226,8 @@ account/credential/location).
 | Registrar credentials | N/A — no registrar account exists yet | When created: must not be the sole credential holder's only account recovery path — `spec/resolver-domain-decision.md` §14.3 recommends hardware-key (WebAuthn/FIDO2) 2FA specifically to raise the bar on this single point |
 | DNS | N/A — no DNS configured yet | Tied to the registrar/DNS-provider account above until otherwise separated |
 | Git repository (source + specification) | **Yes, currently** — hosted at `github.com/n-fujie/TII`, a single GitHub account | Mitigated by full local clonability (`spec/succession-manifest.md` §9) — the repository's *content* survives even if the *hosting account* does not, but the ability to push further official commits does not, until a second maintainer or an organizational account is established |
-| Signing private key (operational copy) | **N/A — no active key.** A ceremony key was generated and retired 2026-09-12 (custody model correction, `spec/production-key-custody.md` §8.5); its plaintext was securely removed | When a real key is generated under the corrected (encrypted-key) mechanism: single-copy-in-one-place is exactly what §7.3 forbids — a separate recovery copy is required before this stops being a single point of failure |
-| Signing private key (offline backup) | **N/A — no active key** — see above | Must be a **different** person/account/vendor than the operational copy, per `spec/production-key-custody.md` §7.3/§8.3 |
+| Signing private key (operational copy) | **Yes — single human operator, single machine.** Active key `1486de6152baec7f`, passphrase-encrypted PKCS8, held only by the human operator (`spec/production-key-custody.md` §8.7). Two prior ceremony keys were generated and retired (`1b96b82d535afc95` 2026-09-12, `46b11023f849e931` 2026-09-13) before this one. | A separate, independently-verified USB recovery copy exists (see row below), satisfying §7.3's minimum — but the passphrase itself is a single point of failure: if the one person who knows it is unavailable, the key is unrecoverable regardless of how many encrypted copies exist. Institutional succession would require a documented passphrase-escrow or multi-party scheme, not yet in place. |
+| Signing private key (offline backup) | **Yes — single physical USB device, same operator.** Confirmed byte-identical to the operational copy (SHA-256 `ad7d345fae18530da94a40b525b2e27510a85c1ea7f889358ef18832a9679a45`), independently verified by the agent. | Satisfies "not the same file/directory as the operational copy," but is **not** yet "a different person/account/vendor" (`spec/production-key-custody.md` §7.3/§8.3) — both copies are controlled by the same individual. Acceptable for TII's current pre-production, single-operator scale per §12's own framing above; would need a second custodian before this stops being a true single point of failure. |
 | IANA contact | N/A — not yet named | A role-email forwarding address (§7 above) reduces this once a domain exists, but IANA's actual contact-of-record is a named person, which is inherently one accountable individual at a time |
 | Change Controller | N/A — not yet resolved (Model A or B) | Model B (organization) spreads this across an entity's account-holders rather than one individual, at the cost of the entity needing to genuinely exist — see `spec/governance-finalization.md` §3 |
 | Domain email (role addresses) | N/A — not created | Same account-separation discipline as the registrar row applies once created |

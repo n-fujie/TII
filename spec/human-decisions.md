@@ -612,3 +612,73 @@ G13 Release artifacts          PASS
 **Overall launch status: still NOT READY.** **Production issuance remains
 DISABLED.** The custody requirement was not weakened to make G3 easier to
 pass — if anything, the bar just got stricter and more honestly stated.
+
+## J: production key generation — AUTHORIZED → EXECUTED (final, 2026-09-13)
+
+The ceremony authorized above ran to completion, entirely in the human
+operator's own terminal — this agent never saw a passphrase, never
+generated a key, and never handled private-key contents at any point.
+
+**A second candidate was generated and retired inside this same
+ceremony, before the final key** (recorded here, not erased): key
+`46b11023f849e931` was generated correctly (directly into encrypted
+PKCS8 form), and passed its sign/verify/tamper tests — but the human's
+chosen passphrase was found to be only 9 bytes, insufficient for a
+long-lived production root key. This was a passphrase-*strength* issue,
+distinct from the earlier FileVault-vs-encryption mistake — the
+encryption mechanism itself was correct this time. The human operator
+chose to generate an entirely new keypair with a strong passphrase from
+first creation, rather than re-encrypt the same key in place (both were
+verified as technically safe; the clean-new-key path was judged
+preferable). Key `46b11023f849e931` is now retired — never promoted,
+never activated, private-key material securely removed (local operational
+copy, a re-encrypted variant, and its USB recovery copy), one non-secret
+public key retained as audit evidence.
+
+**The final production key: `1486de6152baec7f`** (Ed25519,
+passphrase-encrypted PKCS8, generated directly into that form with a
+strong passphrase — no plaintext private-key file ever existed on disk).
+Independently verified by the agent at every step, never merely taken
+from the human's report:
+
+- Public key SHA-256 `8712c17570beaacf079e4909e36b3762f1a1163e0e2575d84d3130b5a97e4311`
+  — recomputed by the agent from the file itself.
+- Key ID `1486de6152baec7f` — re-derived by the agent from the raw public
+  key using the unmodified `keyId()` in `src/checkpoint.js`, three
+  separate times across the ceremony, always matching. Confirmed distinct
+  from both retired keys.
+- Operational encrypted-key SHA-256
+  `ad7d345fae18530da94a40b525b2e27510a85c1ea7f889358ef18832a9679a45` —
+  recomputed by the agent directly from `~/.tii-production/signing-key.final.encrypted.pem`.
+- USB recovery copy confirmed byte-identical (same SHA-256) by the agent
+  reading the USB volume directly, on a physically separate device.
+- Full sign → checkpoint → verify → 4/4-tamper-rejected cycle: PASS,
+  run by the human with the passphrase supplied only via a temporary
+  file they created and deleted themselves, against a disposable temp
+  ledger only — the real `data/ledger.jsonl` was never opened.
+- Recovery rehearsal: PASS, both via the same signing test run against a
+  disposable copy of the USB recovery file, and via an independent
+  OpenSSL-only public-key equivalence proof.
+- No private-key or passphrase material in Git (permanent regression
+  test, still passing) or in Vercel (independently checked via
+  `vercel env ls` — only `TII_RESOLVER_BASE_URL` present).
+- Canonical ledger unchanged throughout: 10 events, SHA-256
+  `6882290be03e67ffd6abddafbfcccdf5a0a44b1cf4770d6f4763ce786c0d85fd`,
+  before and after.
+- Full test suite: 185/185 passing.
+
+**Status: key `1486de6152baec7f` is ACTIVE FOR CHECKPOINT SIGNING.**
+
+```
+G3  Production key custody   PASS
+G7  Permanent resolver       PASS
+G8  Governance               PASS
+G9  IANA                     CONDITIONAL PASS
+G13 Release artifacts        PASS
+```
+
+**Remaining non-PASS launch gate: G9 only. Overall launch status: still
+NOT READY.** Being ACTIVE FOR CHECKPOINT SIGNING is a statement about
+signing capability, not about identity or issuance — **production TII
+issuance remains DISABLED**, no IANA submission occurred in this task,
+and G7/G8/G13 were not reopened.

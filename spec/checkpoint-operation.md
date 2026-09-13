@@ -148,6 +148,16 @@ no-server workflow uses.
   test E). Revocation only marks that key as no longer eligible to sign *new*
   checkpoints.
 
+- **Production key status (2026-09-13):** a production signing key exists
+  and is ACTIVE FOR CHECKPOINT SIGNING — key ID `1486de6152baec7f`
+  (Ed25519, passphrase-encrypted PKCS8; see
+  `spec/production-key-custody.md` §8.7 for the full ceremony record and
+  the two retired candidates, `1b96b82d535afc95` and `46b11023f849e931`,
+  that preceded it and were never activated). This is a statement about
+  checkpoint-signing capability only — it does not by itself enable
+  production TII issuance, which remains a separate condition gated by
+  `src/production-gate.js` and is currently DISABLED.
+
 ## Commands
 
 ```

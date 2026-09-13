@@ -450,3 +450,125 @@ produce a second, separately-encrypted recovery copy in a genuinely
 separate location, exactly as §7.3/§7.4 already describe — nothing about
 the ceremony's generation or recovery steps changes, only the operational
 copy's storage format.
+
+### 8.7 Final ceremony executed (2026-09-13) — G3 PASS
+
+The human operator ran §8.6's remaining action end-to-end, entirely in
+their own terminal. This agent never saw a passphrase, never generated a
+key, and never touched private-key contents — only encrypted ciphertext
+(via file listing / header check / SHA-256, never decryption) and
+non-secret public-key material.
+
+**A second candidate was generated and retired before the final key,
+inside this same ceremony.** For completeness (append-only, nothing
+erased):
+
+1. A key was generated directly into encrypted PKCS8 form using
+   `openssl genpkey -algorithm Ed25519 -aes-256-cbc`, per §8.6 — key ID
+   `46b11023f849e931`. Sign/verify/tamper tests all passed.
+2. The steward then observed that the human-chosen passphrase for that
+   key was only 9 bytes — insufficient for a long-lived production root
+   key even though it was a real passphrase (not the §8.5 FileVault
+   mistake; the encryption mechanism was correct, the passphrase strength
+   was not). Re-encryption of the *same* keypair under a stronger
+   passphrase was verified as possible (`openssl pkey -in ... -aes-256-cbc
+   -out ...`, decrypts and re-encrypts in one step, confirmed on disposable
+   test material to never write an intermediate plaintext file), but the
+   human operator instead chose to generate an **entirely new** Ed25519
+   keypair with a strong passphrase from first creation — the cleaner of
+   the two safe options, and explicitly permitted ("do not generate a new
+   key unless re-encryption cannot be performed safely" — judged, by the
+   human holding the passphrase, not safe enough to prefer over a clean
+   new key in this case).
+3. **Key `46b11023f849e931` is retired — ceremony/test key only, never
+   promoted, never activated as the production signing authority.** Its
+   private-key material (operational copy, a re-encrypted copy, and its
+   USB recovery copy) was securely overwritten (3-pass random overwrite,
+   then unlinked — best-effort on SSD/flash, not a cryptographic erasure
+   guarantee) and removed. One non-secret public-key copy is retained as
+   audit evidence (`retired-46b11023f849e931.public.pem`).
+
+**The final production key:**
+
+- **Key ID: `1486de6152baec7f`** (derived from the public key alone via
+  the unmodified `keyId()` in `src/checkpoint.js` — independently
+  re-derived by the agent three times across the ceremony, always
+  matching the human-reported value).
+- Algorithm: Ed25519. Format: passphrase-encrypted PKCS8
+  (`-----BEGIN ENCRYPTED PRIVATE KEY-----`), generated directly into that
+  form — no plaintext private-key file ever existed on disk.
+- Public key SHA-256:
+  `8712c17570beaacf079e4909e36b3762f1a1163e0e2575d84d3130b5a97e4311` —
+  independently recomputed by the agent from a copy of the public key
+  file (non-secret, safe to copy anywhere), matching the human's report.
+- Operational encrypted-key SHA-256:
+  `ad7d345fae18530da94a40b525b2e27510a85c1ea7f889358ef18832a9679a45` —
+  independently recomputed by the agent directly from
+  `~/.tii-production/signing-key.final.encrypted.pem` on disk (not merely
+  taken from the human's report).
+- Operational path (accepted as Option A — no hard-coded fallback added;
+  `resolveSigningKey()` continues to require explicit configuration via
+  `TII_CHECKPOINT_PRIVATE_KEY_FILE`):
+  `~/.tii-production/signing-key.final.encrypted.pem`.
+- A second, separately-encrypted recovery copy exists on a physically
+  separate USB device, confirmed byte-identical to the operational copy
+  (same SHA-256 above) — independently confirmed by the agent reading the
+  USB volume directly, not only from the human's report.
+- **Signing test** (`scripts/g3-production-key-check.js`, run by the human
+  with the passphrase supplied only via a temporary file they created and
+  deleted themselves, never visible to the agent, against a disposable
+  temp ledger — the real `data/ledger.jsonl` was never opened): sign
+  PASS, verify PASS, 4/4 tamper mutations correctly rejected.
+- **Recovery rehearsal**: performed twice — once from a disposable copy of
+  the USB recovery file run through the same script (same result), and
+  once as an OpenSSL-only public-key equivalence proof
+  (`openssl pkey -pubout` against the recovery copy, diffed against the
+  known-good public key) — both confirmed the recovery copy reproduces
+  the identical keypair.
+- **Secret audit**: no PEM private-key block or passphrase in any
+  git-tracked file (permanent regression test, §8.5.4, still passing); no
+  signing-key-related environment variable on the deployed Vercel project
+  (`tiiarchive` — the only variable present is `TII_RESOLVER_BASE_URL`
+  from the unrelated G7 resolver work, independently checked via
+  `vercel env ls`).
+- **Ledger invariant**: `data/ledger.jsonl` unchanged throughout the
+  entire ceremony — 10 events, SHA-256
+  `6882290be03e67ffd6abddafbfcccdf5a0a44b1cf4770d6f4763ce786c0d85fd`, head
+  hash `eb27a2b7a557465b1301e7225052d03b6fc1550caa7b9ea943e5e90835427e95`,
+  `verify().ok === true` — checked before and after every phase of this
+  ceremony.
+- Full test suite: 185/185 passing (re-run multiple times for confidence
+  after one transient, non-reproducing flake in the multi-process
+  concurrency test — not a regression).
+
+**Status: key `1486de6152baec7f` is ACTIVE FOR CHECKPOINT SIGNING.**
+This is a statement about checkpoint-signing authority only — it does
+**not** enable production TII issuance, which remains a separate,
+independently-gated condition in `src/production-gate.js` and remains
+DISABLED. **G3 Production Key Custody: PASS.**
+
+#### Public verification material — key `1486de6152baec7f`
+
+Non-secret; safe to publish and copy anywhere. This is the only material
+published for this key — no encrypted private key, no passphrase, no
+recovery-device location, and no local filesystem path is included below.
+
+- **Algorithm:** Ed25519
+- **Key ID:** `1486de6152baec7f`
+- **Status:** ACTIVE FOR CHECKPOINT SIGNING (not production-issuance authority)
+- **Public key (SPKI PEM):**
+  ```
+  -----BEGIN PUBLIC KEY-----
+  MCowBQYDK2VwAyEAB9h/A6x4rn8A+eNx96vfSIqNzXFkoqM+q1dieWD4iPg=
+  -----END PUBLIC KEY-----
+  ```
+- **Public-key SHA-256:** `8712c17570beaacf079e4909e36b3762f1a1163e0e2575d84d3130b5a97e4311`
+- **Verification procedure:** every checkpoint this key signs embeds this
+  same public key and `key_id` directly in the checkpoint file
+  (`tii checkpoint verify` / `GET /checkpoint/verify` / the `/audit`
+  page); once the first real checkpoint is created it is additionally
+  recorded in `checkpoints/keyset.json`, so verification does not depend
+  on this document. A checkpoint is `VERIFIED` only if its embedded
+  signature validates against this exact public key under Ed25519 over
+  the RFC 8785 JCS bytes of the checkpoint object — see
+  `spec/checkpoint-operation.md`.
