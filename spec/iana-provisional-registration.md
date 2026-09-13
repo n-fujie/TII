@@ -359,3 +359,33 @@ SUBMIT / DO NOT SUBMIT
 resolved; PASS still requires the `tii` scheme to actually appear in the
 IANA registry, which requires human submission of the form below, not
 yet performed.
+
+### Final fresh registry check + submission field values (2026-09-13)
+
+Re-checked immediately before preparing final field values, independent
+of every check above: `https://www.iana.org/assignments/uri-schemes/uri-schemes.xhtml`
+contains **no** `tii` entry — exact match count 0, near-match count 0.
+No conflict.
+
+**Submission package: READY.** Exact field values for
+`https://www.iana.org/form/protocol-assignment` ("General Request for
+Assignments" — the current official route; no scheme-specific form
+exists):
+
+| Form field | Value |
+|---|---|
+| Contact Name | Naoto Fujie |
+| Contact Email | `platodesign@icloud.com` |
+| What type of assignment/registration are you requesting? | Provisional registration of a new URI scheme. |
+| Which registry are you requesting this assignment/registration be made in? | Uniform Resource Identifier (URI) Schemes |
+| Brief description of why you need this assignment/registration | Requesting Provisional registration of the `tii` URI scheme for Transition-Ignition Identifiers (TII) — a reference and audit infrastructure for recording how distinctions, relations, and classifications become operative over time. `tii:<token>` is an opaque identifier syntax; tokens encode no ownership, location, hosting provider, domain, or mutable metadata. The HTTPS resolver, where present, is deployment configuration separate from identifier identity. Fragments follow generic RFC 3986 URI-reference semantics and are not scheme-specific. Change Controller: Naoto Fujie, operating publicly as P/A Institute. This is a request for Provisional status only — no claim of endorsement, permanence, immutability, or trusted timestamping is made. |
+| Additional Information — reference to the specification or RFC | Full specification, including the RFC 7595 registration template (syntax, semantics, encoding, fragment handling, interoperability, security, and privacy considerations): `https://transition-ignition-id.org/spec` (section 12). |
+
+**This agent will not submit this form.** It requires human interaction
+per the task's own explicit boundary — return here for the human to
+lodge the request themselves, then record the submission per the
+"After submission" tracking below.
+
+**G9 remains CONDITIONAL PASS** until: (1) the human submits, and (2)
+`tii` actually appears in the IANA registry under this registration —
+submission alone does not make G9 PASS.
