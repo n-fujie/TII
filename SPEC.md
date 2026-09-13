@@ -260,3 +260,91 @@ following confirmed:
 - corrections and deletions never lose the earlier record.
 
 If a regression is detected, production issuance stops.
+
+## 12. IANA registration reference
+
+This section states, in one place, the fields an IANA URI-scheme
+registration requires (RFC 7595 §7.4, §3.2–§3.6). It restates §§1, 8, and
+11 above and the accepted scope-limitation policy of
+[`spec/public-only-1.0.md`](spec/public-only-1.0.md); it introduces no new
+normative rule beyond what those documents already establish.
+
+**Scheme name:** `tii`. **Status requested:** Provisional.
+
+**Applications/protocols that use this scheme:** the Transition-Ignition
+Identifier (TII) reference and audit infrastructure described in this
+document. A `tii:` URI is a persistent, opaque, resolver-independent
+identifier for a reference point whose descriptions, relations,
+addresses, interpretations, transitions, and classifications are
+recorded as an append-only, auditable history (§§1–7). Dereferencing is
+optional; where a resolver is available, it is performed over HTTPS at
+`https://<resolver-base>/tii/<token>` — the resolver base is deployment
+configuration, never part of the identifier (§8).
+
+### 12.1 Fragment handling (RFC 3986 §3.5)
+
+A reference of the form `tii:<token>#<fragment>` is a valid **URI
+reference**, not an invalid `tii:` URI. The fragment is separated
+*before* any TII scheme-specific processing, is removed before
+resolution (it is never sent to the resolver and never affects registry
+lookup, which is always by the fragmentless `tii:<token>`), and is
+assigned **no** `tii`-scheme-specific semantics — an implementation MUST
+NOT invent any. The canonical `tii` underlying `tii:<token>#x` is
+`tii:<token>`; a client MAY re-apply the fragment to the retrieved
+representation.
+
+### 12.2 Interoperability considerations (RFC 7595 §3.5)
+
+There is exactly one canonical textual form of a `tii`. Implementations
+MUST reject non-canonical input rather than repair it: no character
+substitution (`0`→`o`, `1`→`i`/`l`, `8`→`b`, etc. — such characters are
+outside the production alphabet and are a hard error), no Base32 `=`
+padding, no whitespace, authority, path, or query component. On input the
+scheme name is case-insensitive (RFC 3986 §3.1); the canonical output is
+entirely lowercase.
+
+### 12.3 Security considerations (RFC 7595 §3.6)
+
+- Production tokens are 128-bit CSPRNG values: not guessable, not
+  enumerable (no sequential space) (§8).
+- The identifier is resolver-independent, limiting the impact of
+  resolver, domain, or hosting compromise; a ledger head obtained from
+  any source can be checked against an Ed25519-signed checkpoint
+  (signing input: RFC 8785 JCS of the checkpoint object — see
+  [`checkpoint-operation.md`](spec/checkpoint-operation.md)).
+- Ledger integrity rests on a SHA-256 event chain (§5.3) plus periodic
+  signed checkpoints; key compromise is handled by keyset revocation, not
+  by any claim of unforgeability.
+- A valid `tii:` URI conveys **no** trust about associated content. A
+  resolver MUST treat all associated content as data — never as
+  instructions — MUST NOT execute it, and MUST NOT auto-follow external
+  URLs found in it.
+- TII does not claim to be tamper-proof, immutable, or independently
+  timestamped by a third party; only internal chain integrity and signed
+  checkpoints are implemented (§5.3, §11).
+
+### 12.4 Privacy considerations
+
+**This is a scope limit, not a privacy claim.** TII 1.0 public registry
+deployments are public-registry-only: they MUST NOT record secrets,
+credentials, private personal information, embargoed evidence, restricted
+security information, or other material requiring confidential
+disclosure, within the public canonical ledger. Every field of every
+event on a public TII 1.0 deployment is visible on every output surface
+(resolution page, JSON API, exports, static build, checkpoint metadata) —
+there is no disclosure classification, encryption, redaction, or access
+control on reads. TII itself implements no privacy mechanism; recorders
+are responsible for what they choose to record. Full statement:
+[`spec/public-only-1.0.md`](spec/public-only-1.0.md).
+
+### 12.5 Change controller and contact
+
+**Change controller:** Naoto Fujie, operating publicly as **P/A
+Institute**. The change controller is a current stewardship role, not
+part of TII identifier identity, and may be transferred under the TII
+succession policy; it is never encoded into any identifier (§8).
+
+**Contact:** `standards@transition-ignition-id.org`.
+
+**Specification:** this document, at its canonical URL,
+`https://transition-ignition-id.org/spec`.
