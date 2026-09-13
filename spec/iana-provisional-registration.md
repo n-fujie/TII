@@ -254,7 +254,7 @@ remain open**, per this phase's instruction to leave only those:
 | Field | Status |
 |---|---|
 | Contact (named person) | **RESOLVED (2026-09-11) — Naoto Fujie, `spec/human-decisions.md`** |
-| Contact (role address) | **RESOLVED IN NAME, NOT YET OPERATIONAL (2026-09-13) — `standards@transition-ignition-id.org`; DNS/MX not yet configured, see `spec/external-infrastructure-closure.md` G9 role-email tracking** |
+| Contact | **RESOLVED (2026-09-13, corrected) — Naoto Fujie `<platodesign@icloud.com>`. A custom-domain role address (`standards@transition-ignition-id.org`) was considered but the steward decided it is not a prerequisite for provisional registration and may be introduced later — see the correction note after "G9 status" below.** |
 | Change Controller | **RESOLVED (2026-09-11) — Naoto Fujie, operating publicly as P/A Institute (Model A), `spec/human-decisions.md`** |
 | Specification URL | **RESOLVED AND LIVE (2026-09-13) — `https://transition-ignition-id.org/spec`, independently fetched and confirmed to contain the RFC 7595-required sections (this document's technical content, merged into `SPEC.md` §12)** |
 
@@ -326,3 +326,36 @@ human account creation — see `spec/external-infrastructure-closure.md`).
 **Does not become PASS in this phase** — PASS requires the `tii` scheme
 to actually appear in the IANA registry under the intended registration,
 which by definition has not occurred (nothing has been submitted).
+
+### Contact decision correction (2026-09-13, same day)
+
+The steward corrected the plan above: **do not create or purchase a
+custom-domain role mailbox as a G9 prerequisite.** The role-email
+gap-finding and the Forward Email provider selection immediately above
+remain accurate as a record of what was investigated, but are **no
+longer the blocking path** — a role address under the permanent domain
+may be introduced later, but is explicitly not required for provisional
+registration.
+
+**Corrected authoritative Contact and Change Controller, used from this
+point on:**
+
+```
+Contact:                      Naoto Fujie <platodesign@icloud.com>
+Change Controller:            Naoto Fujie <platodesign@icloud.com>, operating publicly as P/A Institute
+Specification URL:            https://transition-ignition-id.org/spec -- LIVE, independently verified
+Official registry check:      CLEAR (re-confirmed 2026-09-13, this session)
+Draft completeness:           COMPLETE (all governance and technical fields resolved)
+
+ACTION REQUIRING HUMAN AUTHORIZATION:
+SUBMIT / DO NOT SUBMIT
+```
+
+`SPEC.md` §12.5 was updated to cite `platodesign@icloud.com` as Contact
+(deployed and independently re-verified live — see
+`spec/external-infrastructure-closure.md`'s correction note).
+
+**G9 remains CONDITIONAL PASS** — all preparatory prerequisites are now
+resolved; PASS still requires the `tii` scheme to actually appear in the
+IANA registry, which requires human submission of the form below, not
+yet performed.

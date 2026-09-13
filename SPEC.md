@@ -344,7 +344,9 @@ Institute**. The change controller is a current stewardship role, not
 part of TII identifier identity, and may be transferred under the TII
 succession policy; it is never encoded into any identifier (§8).
 
-**Contact:** `standards@transition-ignition-id.org`.
+**Contact:** Naoto Fujie, `platodesign@icloud.com`. A role address under
+the permanent domain (e.g. `standards@transition-ignition-id.org`) may be
+introduced later; it is not a prerequisite for this registration.
 
 **Specification:** this document, at its canonical URL,
 `https://transition-ignition-id.org/spec`.

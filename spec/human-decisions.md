@@ -682,3 +682,27 @@ NOT READY.** Being ACTIVE FOR CHECKPOINT SIGNING is a statement about
 signing capability, not about identity or issuance — **production TII
 issuance remains DISABLED**, no IANA submission occurred in this task,
 and G7/G8/G13 were not reopened.
+
+## G9 — IANA contact decision correction (2026-09-13, same day)
+
+Steward decision: **do not create or purchase a custom-domain role
+mailbox for G9.** Use the existing stable address instead:
+
+```
+Contact:            Naoto Fujie <platodesign@icloud.com>
+Change Controller:  Naoto Fujie <platodesign@icloud.com>, operating publicly as P/A Institute
+```
+
+`standards@transition-ignition-id.org` (investigated, Forward Email
+selected as provider) remains a recorded option for later, but is
+explicitly **not** a prerequisite for provisional registration. `SPEC.md`
+§12.5 was corrected accordingly, deployed, and independently re-verified
+live at `https://transition-ignition-id.org/spec`. Full detail:
+`spec/iana-provisional-registration.md`'s correction note,
+`spec/external-infrastructure-closure.md`'s correction note.
+
+**All G9 preparatory prerequisites are now resolved** (registry re-check
+clear, Contact/Change Controller resolved, Specification URL live and
+RFC 7595-complete). **G9 remains CONDITIONAL PASS** — PASS still requires
+human submission of the provisional registration (not yet performed) and
+its actual appearance in the IANA registry.

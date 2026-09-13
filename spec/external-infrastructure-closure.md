@@ -150,6 +150,26 @@ as operational.
 
 **G9 remains CONDITIONAL PASS.**
 
+### Contact decision correction (2026-09-13, same day)
+
+The steward corrected the plan above: the role-email path is **not** a
+prerequisite for G9. A custom-domain role mailbox is deferred, not
+purchased. The existing stable address `platodesign@icloud.com` is used
+instead for both Contact and Change Controller:
+
+```
+Contact:            Naoto Fujie <platodesign@icloud.com>
+Change Controller:  Naoto Fujie <platodesign@icloud.com>, operating publicly as P/A Institute
+```
+
+`SPEC.md` §12.5 was updated accordingly and independently re-verified
+live. The Forward Email investigation above remains an accurate record
+of what was checked, not a live blocker — `standards@transition-ignition-id.org`
+may be introduced later at the steward's discretion. **G9 remains
+CONDITIONAL PASS**; the remaining path to PASS is human submission of the
+provisional registration (not yet performed) followed by its actual
+appearance in the IANA registry.
+
 ## G3 — Production signing-key custody: model fully specified, no key generated
 
 `spec/production-key-custody.md` extended with: a storage-option
