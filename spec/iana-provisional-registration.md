@@ -253,10 +253,10 @@ remain open**, per this phase's instruction to leave only those:
 
 | Field | Status |
 |---|---|
-| Contact (named person) | **OPEN — `spec/governance-finalization.md` §6, REQUIRED BEFORE IANA** |
-| Contact (role address) | **OPEN — depends on the approved domain, `spec/resolver-domain-decision.md` §14** |
-| Change Controller | **OPEN — `spec/governance-finalization.md` §3/§6, Model A or B not yet chosen** |
-| Specification URL | **OPEN — depends on the approved domain; see "IANA specification URL" below** |
+| Contact (named person) | **RESOLVED (2026-09-11) — Naoto Fujie, `spec/human-decisions.md`** |
+| Contact (role address) | **RESOLVED IN NAME, NOT YET OPERATIONAL (2026-09-13) — `standards@transition-ignition-id.org`; DNS/MX not yet configured, see `spec/external-infrastructure-closure.md` G9 role-email tracking** |
+| Change Controller | **RESOLVED (2026-09-11) — Naoto Fujie, operating publicly as P/A Institute (Model A), `spec/human-decisions.md`** |
+| Specification URL | **RESOLVED AND LIVE (2026-09-13) — `https://transition-ignition-id.org/spec`, independently fetched and confirmed to contain the RFC 7595-required sections (this document's technical content, merged into `SPEC.md` §12)** |
 
 ### IANA specification URL
 
@@ -296,26 +296,33 @@ assumed stable.
 Scheme:                       tii
 Registration type:            Provisional
 
-Contact:                      MISSING (spec/governance-finalization.md §6)
-Change Controller:            MISSING (spec/governance-finalization.md §3/§6)
-Specification URL:            MISSING (depends on spec/resolver-domain-decision.md §14)
+Contact:                      standards@transition-ignition-id.org (Naoto Fujie) -- NOT YET OPERATIONAL (no MX/DNS configured)
+Change Controller:            Naoto Fujie, operating publicly as P/A Institute -- RESOLVED
+Specification URL:            https://transition-ignition-id.org/spec -- LIVE, independently verified to contain required sections
 
-Official registry check:      CLEAR (re-confirmed 2026-09-11, this session)
-Draft completeness:           INCOMPLETE (3 governance fields outstanding — technical fields COMPLETE)
+Official registry check:      CLEAR (re-confirmed 2026-09-13, this session)
+Draft completeness:           2 of 3 governance fields RESOLVED; role-email address named but not yet operational -- technical fields COMPLETE
 
 ACTION REQUIRING HUMAN AUTHORIZATION:
 SUBMIT / DO NOT SUBMIT
 ```
 
-**Not submitted. Draft completeness is INCOMPLETE on governance fields —
-submission should not be authorized until those three fields read a
-resolved value, not MISSING, regardless of any other launch pressure.**
+**Not yet submitted. `standards@transition-ignition-id.org` cannot yet
+receive or send mail — no MX/DNS records exist. Submission should not be
+authorized until this address is operational and independently verified,
+regardless of any other launch pressure.**
 
-### G9 status
+### G9 status (updated 2026-09-13)
 
-**CONDITIONAL PASS** (unchanged from the prior phase) — technical
-readiness complete and reconfirmed; registry reconfirmed clear; governance
-fields and the specification URL remain open pending G7/G8. **Does not
-become PASS in this phase** — PASS requires the `tii` scheme to actually
-appear in the IANA registry under the intended registration, which by
-definition has not occurred.
+**CONDITIONAL PASS** — technical readiness complete; registry reconfirmed
+clear; Contact (named person) and Change Controller are now RESOLVED
+(Naoto Fujie, G8 PASS); the Specification URL is now RESOLVED AND LIVE,
+independently verified to contain every RFC 7595-required section
+(`SPEC.md` §12, deployed 2026-09-13). **The sole remaining prerequisite
+before submission is the operational role email**
+(`standards@transition-ignition-id.org` — provider selected: Forward
+Email, Enhanced Protection tier; DNS records not yet configured, pending
+human account creation — see `spec/external-infrastructure-closure.md`).
+**Does not become PASS in this phase** — PASS requires the `tii` scheme
+to actually appear in the IANA registry under the intended registration,
+which by definition has not occurred (nothing has been submitted).

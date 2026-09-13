@@ -125,6 +125,31 @@ to a human.
 until the `tii` scheme actually appears in the IANA registry under the
 intended registration.
 
+### Update (2026-09-13) — governance fields resolved, one prerequisite remains
+
+Contact (Naoto Fujie) and Change Controller (Naoto Fujie, operating
+publicly as P/A Institute) resolved via G8 PASS. The Specification URL
+(`https://transition-ignition-id.org/spec`) is now live and independently
+verified to contain every RFC 7595-required section — see `SPEC.md` §12,
+merged from this document's already-accepted technical content and
+`spec/public-only-1.0.md`'s privacy policy, per explicit steward decision.
+
+**Sole remaining prerequisite: the role email
+`standards@transition-ignition-id.org` is not yet operational.** Live DNS
+check found no MX or TXT records for the domain. Steward-selected
+provider: **Forward Email, Enhanced Protection tier** ($3/month,
+supports both inbound receipt and authenticated outbound reply — a
+forwarding-only free tier was explicitly rejected as insufficient for a
+long-lived standards contact). Requires human account creation and
+payment; not performed by the agent. Once the human confirms the account
+exists, the agent will obtain the exact DNS records from the account,
+add them via Vercel's DNS management (nameservers stay on Vercel — no
+migration), verify propagation, and independently test both inbound
+delivery and authenticated outbound reply before treating the role email
+as operational.
+
+**G9 remains CONDITIONAL PASS.**
+
 ## G3 — Production signing-key custody: model fully specified, no key generated
 
 `spec/production-key-custody.md` extended with: a storage-option
