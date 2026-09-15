@@ -23,6 +23,7 @@
 const identifierProd = require('./identifier');
 const gate = require('./production-gate');
 const checkpointStore = require('./checkpoint-store');
+const { canonicalize } = require('./canonical');
 
 class ProductionGateClosedError extends Error {
   constructor(status) {
@@ -30,6 +31,47 @@ class ProductionGateClosedError extends Error {
     this.name = 'ProductionGateClosedError';
     this.code = 'production-gate-closed';
     this.status = status;
+  }
+}
+
+/**
+ * Whether `existing` (a persisted tii.issued event) represents the SAME
+ * logical issuance request as one that would produce `intendedContent` —
+ * i.e. whether a retry under the same idempotency_key is a replay of this
+ * exact request (return the original result) rather than a genuinely
+ * different request reusing the same key (fail closed). Deliberately the
+ * same two caller-controlled fields src/ledger.js's own _validateAppend()
+ * already compares (event_type + content) — no new fingerprint semantics
+ * invented; `tii` cannot be part of this comparison because it does not
+ * exist yet for the pre-RNG check this function exists to support.
+ */
+function sameIssuanceIntent(existing, intendedContent) {
+  return (
+    !!existing &&
+    existing.event_type === 'tii.issued' &&
+    canonicalize(existing.content || {}) === canonicalize(intendedContent ?? {})
+  );
+}
+
+/**
+ * Read-only checkpoint status for an idempotent-replay result. A replay
+ * must not create a checkpoint (§2.A: "no additional externally visible
+ * mutation") — restoring checkpoint currency after some earlier failure is
+ * the existing, separate `tii checkpoint create` operator recovery path
+ * (spec/first-production-issuance-procedure.md step 17), not something a
+ * replay call performs as a side effect.
+ */
+function readOnlyCheckpointStatus(ledger, checkpointDir) {
+  try {
+    const v = checkpointStore.verifyCheckpoint(ledger, { dir: checkpointDir });
+    return {
+      status: 'NOT_ATTEMPTED_REPLAY',
+      reason: 'idempotent replay creates no new checkpoint',
+      current_checkpoint_status: v.status,
+      matches_current_head: v.matches_current_head === true,
+    };
+  } catch (e) {
+    return { status: 'NOT_ATTEMPTED_REPLAY', reason: 'idempotent replay creates no new checkpoint', current_checkpoint_status: 'UNKNOWN', error: e.message };
   }
 }
 
@@ -49,6 +91,32 @@ function issueProductionTII(ledger, opts = {}) {
   const status = gate.computeGateStatus({ ledgerFile: ledger.file, checkpointDir, env });
   if (!status.available) {
     throw new ProductionGateClosedError(status);
+  }
+
+  const intendedContent = { ...content, identifier_status: 'production' };
+
+  // Idempotent replay MUST be resolved BEFORE any RNG, collision check,
+  // ledger append, or checkpoint — never after (see
+  // spec/production-launch-gate.md's "Pre-G9 final launch audit" note and
+  // "G6/G14 idempotency repair" for why the old post-RNG check was wrong).
+  // Not gated behind dryRun: dryRun's own branch below is unaffected and
+  // still never touches durable state; this check only short-circuits the
+  // REAL (non-dry-run) path, before dryRun is even inspected, so a caller
+  // cannot bypass a real prior replay by passing dryRun=true.
+  if (!dryRun && idempotency_key) {
+    const existing = ledger.findByIdempotencyKey(idempotency_key);
+    if (existing) {
+      if (!sameIssuanceIntent(existing, intendedContent)) {
+        throw new Error(`idempotency_key "${idempotency_key}" was already used for a different operation`);
+      }
+      return {
+        tii: existing.tii,
+        event: existing,
+        gate_status: status,
+        production_checkpoint: readOnlyCheckpointStatus(ledger, checkpointDir),
+        idempotent_replay: true,
+      };
+    }
   }
 
   // A candidate token is generated even in dry-run mode (so the operator can
@@ -97,7 +165,7 @@ function issueProductionTII(ledger, opts = {}) {
         tii: candidate,
         event_type: 'tii.issued',
         recorder,
-        content: { ...content, identifier_status: 'production' },
+        content: intendedContent,
         idempotency_key,
       });
 
@@ -121,10 +189,32 @@ function issueProductionTII(ledger, opts = {}) {
         production_checkpoint = { status: 'FAILED', error: e.message, warning: 'the production mutation above IS committed to canonical history; further production mutations are blocked until checkpoint currency is restored (see production_checkpoint.status)' };
       }
 
-      return { tii: candidate, event, gate_status: status, production_checkpoint };
+      return { tii: event.tii, event, gate_status: status, production_checkpoint };
     } catch (e) {
-      if (/^TII already issued/.test(e.message)) continue; // authoritative collision, discard and retry
-      throw e;
+      if (/^TII already issued/.test(e.message)) continue; // authoritative candidate collision, discard and retry with a fresh candidate
+
+      // A concurrent caller may have completed THIS exact logical request
+      // (same idempotency_key, same intent) while we were drawing our own
+      // (losing) candidate — the pre-RNG check above ran before their
+      // append committed, so we didn't see it then. ledger.append()'s own
+      // authoritative resync (inside the writer lock) means this ledger
+      // instance's in-memory state is now current: resolve by re-checking,
+      // not by assuming. If it now matches, this is a replay, not a
+      // conflict — return the winner's result rather than propagating an
+      // error to a caller who made the identical request.
+      if (idempotency_key && /^idempotency_key ".*" was already used for a different operation$/.test(e.message)) {
+        const existing = ledger.findByIdempotencyKey(idempotency_key);
+        if (sameIssuanceIntent(existing, intendedContent)) {
+          return {
+            tii: existing.tii,
+            event: existing,
+            gate_status: status,
+            production_checkpoint: readOnlyCheckpointStatus(ledger, checkpointDir),
+            idempotent_replay: true,
+          };
+        }
+      }
+      throw e; // genuinely different intent under the same key, or any other error
     }
   }
   throw new Error('production issuance failed: collision retries exhausted (implausible at 128-bit entropy)');

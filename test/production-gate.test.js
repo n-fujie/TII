@@ -400,6 +400,219 @@ test('§10 a collided-and-discarded candidate never becomes a TII even transient
   assert.equal(collideCount, 1, 'the collided candidate must appear in the raw canonical ledger exactly once (the original), never a duplicate from the discarded retry attempt');
 });
 
+/* ------------------------------------- G6/G14 idempotency repair (2026-09-15) ---
+ * spec/production-launch-gate.md's "Pre-G9 final launch audit" note + "G6/G14
+ * idempotency repair": issueProductionTII()'s idempotency_key previously drew
+ * a fresh random candidate BEFORE resolving replay, so a same-key retry threw
+ * instead of returning the original result. Fixed by checking
+ * ledger.findByIdempotencyKey() before any RNG/collision-check/append/
+ * checkpoint — mirroring the pattern Ledger.issueTII() (the test path)
+ * already used correctly. These tests prove the contract from
+ * spec/production-launch-gate.md's correction note section 2:
+ *   A. same key + same intent -> original result, no new candidate/event/checkpoint
+ *   B. same key + different intent -> fail closed
+ *   C. no key -> ordinary issuance
+ */
+
+test('G6 repair — same idempotency_key + same intent returns the EXACT original result, draws no new randomness, appends no new event, creates no new checkpoint', () => {
+  const { ledger } = freshLedger();
+  const { env, checkpointDir } = allSatisfiedFor(ledger, []);
+
+  let rngCalls = 0;
+  const original = identifierProd.generateIdentifier;
+  identifierProd.generateIdentifier = (...args) => {
+    rngCalls++;
+    return original.apply(identifierProd, args);
+  };
+  try {
+    const opts = { env, checkpointDir, recorder: { id: 't', kind: 'person' }, content: { note: 'idem-test' }, idempotency_key: 'G6-K1' };
+    const first = issueProductionTII(ledger, opts);
+    assert.equal(rngCalls, 1, 'sanity: the first call really did draw one candidate');
+    assert.equal(first.idempotent_replay, undefined, 'the FIRST call is not itself a replay');
+
+    const eventCountAfterFirst = ledger.events.length;
+    const checkpointsAfterFirst = checkpointStore.listCheckpoints(checkpointDir).length;
+
+    const second = issueProductionTII(ledger, opts);
+
+    assert.equal(rngCalls, 1, 'the replay must draw NO new randomness — generateIdentifier() must not be called again');
+    assert.equal(second.tii, first.tii, 'replay must return the EXACT original tii');
+    assert.deepEqual(second.event, first.event, 'replay must return the EXACT original event');
+    assert.equal(second.idempotent_replay, true);
+    assert.equal(ledger.events.length, eventCountAfterFirst, 'replay must append no new ledger event');
+    assert.equal(checkpointStore.listCheckpoints(checkpointDir).length, checkpointsAfterFirst, 'replay must create no new checkpoint file');
+    assert.equal(second.production_checkpoint.status, 'NOT_ATTEMPTED_REPLAY');
+    assert.equal(ledger.verify().ok, true);
+  } finally {
+    identifierProd.generateIdentifier = original;
+  }
+});
+
+test('G6 repair — replay survives a process restart (fresh Ledger instance over the same file, in-memory state discarded)', () => {
+  const { file, ledger } = freshLedger();
+  const { env, checkpointDir } = allSatisfiedFor(ledger, []);
+  const opts = { env, checkpointDir, recorder: { id: 't', kind: 'person' }, content: { note: 'restart-test' }, idempotency_key: 'G6-RESTART' };
+
+  const first = issueProductionTII(ledger, opts);
+
+  // Model a restart: a BRAND NEW Ledger instance, loaded fresh from disk —
+  // no in-memory state is carried over from `ledger` above.
+  const restarted = new Ledger(file).load();
+  const second = issueProductionTII(restarted, opts);
+
+  assert.equal(second.tii, first.tii, 'idempotency must be derived from durable, on-disk state, not an in-memory cache');
+  assert.equal(second.idempotent_replay, true);
+  assert.equal(restarted.events.length, 1, 'still exactly one canonical event after the restart-replay');
+});
+
+test('G6 repair — same idempotency_key with a DIFFERENT intent fails closed (no silent merge, no duplicate)', () => {
+  const { ledger } = freshLedger();
+  const { env, checkpointDir } = allSatisfiedFor(ledger, []);
+  const key = 'G6-CONFLICT';
+
+  const first = issueProductionTII(ledger, { env, checkpointDir, recorder: { id: 't', kind: 'person' }, content: { note: 'A' }, idempotency_key: key });
+  const eventCountBefore = ledger.events.length;
+
+  assert.throws(
+    () => issueProductionTII(ledger, { env, checkpointDir, recorder: { id: 't', kind: 'person' }, content: { note: 'DIFFERENT' }, idempotency_key: key }),
+    /idempotency_key "G6-CONFLICT" was already used for a different operation/
+  );
+  assert.equal(ledger.events.length, eventCountBefore, 'a rejected conflicting reuse must append nothing');
+  assert.equal(ledger.tiiExists(first.tii), true, 'the original issuance is untouched by the rejected conflicting call');
+});
+
+test('G6 repair — with NO idempotency_key, behavior is ordinary: every call mints a new identifier', () => {
+  const { ledger } = freshLedger();
+  const { env, checkpointDir } = allSatisfiedFor(ledger, []);
+  const first = issueProductionTII(ledger, { env, checkpointDir, recorder: { id: 't', kind: 'person' } });
+  checkpointStore.createCheckpoint(ledger, { dir: checkpointDir, env });
+  const second = issueProductionTII(ledger, { env, checkpointDir, recorder: { id: 't', kind: 'person' } });
+  assert.notEqual(first.tii, second.tii, 'no idempotency_key means no replay semantics at all');
+  assert.equal(ledger.events.length, 2);
+});
+
+test('G6 repair — a genuine token collision on the FIRST execution still retries correctly even when an idempotency_key is present', () => {
+  const { ledger } = freshLedger();
+  const { env, checkpointDir } = allSatisfiedFor(ledger, []);
+  const collideWith = 'tii:' + 'z'.repeat(25) + 'z';
+  const fresh = 'tii:' + 'y'.repeat(25) + 'y';
+
+  const original = identifierProd.generateIdentifier;
+  identifierProd.generateIdentifier = () => collideWith;
+  try {
+    issueProductionTII(ledger, { env, checkpointDir, recorder: { id: 't', kind: 'person' } }); // pre-occupy collideWith with an unrelated issuance
+  } finally {
+    identifierProd.generateIdentifier = original;
+  }
+  checkpointStore.createCheckpoint(ledger, { dir: checkpointDir, env });
+
+  let calls = 0;
+  identifierProd.generateIdentifier = () => {
+    calls++;
+    return calls === 1 ? collideWith : fresh;
+  };
+  try {
+    const result = issueProductionTII(ledger, { env, checkpointDir, recorder: { id: 't', kind: 'person' }, idempotency_key: 'G6-COLLIDE' });
+    assert.equal(result.tii, fresh, 'the collided candidate was discarded and a fresh one minted, exactly as without an idempotency_key');
+    assert.equal(calls, 2);
+  } finally {
+    identifierProd.generateIdentifier = original;
+  }
+});
+
+test('G6 repair — retry after a FAILED checkpoint does not mint a second identifier for the same key (checkpoint recovery, not re-issuance)', () => {
+  const { ledger } = freshLedger();
+  const { env, checkpointDir } = allSatisfiedFor(ledger, []);
+  const key = 'G6-CKPTFAIL';
+
+  // Sabotage ONLY the checkpoint-creation step for exactly one call (not the
+  // gate's up-front signing_ready check) — same technique as the existing
+  // §17 test above, modeling a transient signing failure strictly after the
+  // append has already durably committed.
+  const originalCreate = checkpointStore.createCheckpoint;
+  checkpointStore.createCheckpoint = () => {
+    throw new Error('simulated transient signing failure');
+  };
+  let first;
+  try {
+    first = issueProductionTII(ledger, { env, checkpointDir, recorder: { id: 't', kind: 'person' }, idempotency_key: key });
+  } finally {
+    checkpointStore.createCheckpoint = originalCreate;
+  }
+  assert.equal(first.production_checkpoint.status, 'FAILED');
+  assert.equal(ledger.tiiExists(first.tii), true, 'the mutation is committed despite the checkpoint failure — never rolled back');
+
+  // The gate itself is now closed (checkpoint_current is false) -- exactly
+  // the existing, accepted "block further production mutations until
+  // checkpoint currency is restored" behavior; this is unchanged by this
+  // repair and is not itself a defect (spec/production-launch-gate.md §17).
+  assert.throws(() => issueProductionTII(ledger, { env, checkpointDir, recorder: { id: 't', kind: 'person' }, idempotency_key: key }), ProductionGateClosedError);
+
+  // Operator restores checkpoint currency (spec/first-production-issuance-procedure.md step 17).
+  checkpointStore.createCheckpoint(ledger, { dir: checkpointDir, env });
+
+  // NOW a retry with the same key must replay the original — not mint a second TII.
+  const retried = issueProductionTII(ledger, { env, checkpointDir, recorder: { id: 't', kind: 'person' }, idempotency_key: key });
+  assert.equal(retried.tii, first.tii, 'recovery must never issue a second production identifier for the same idempotency key');
+  assert.equal(retried.idempotent_replay, true);
+  assert.equal(ledger.events.filter((e) => e.event_type === 'tii.issued').length, 1, 'exactly one tii.issued event exists for this key, ever');
+});
+
+test('G6 repair — CONCURRENCY: N processes calling issueProductionTII() with the SAME idempotency_key converge on exactly one canonical event and one tii', async () => {
+  const { file, ledger } = freshLedger();
+  const { env, checkpointDir } = allSatisfiedFor(ledger, []);
+
+  const workerFile = path.join(path.dirname(file), 'worker.js');
+  fs.writeFileSync(
+    workerFile,
+    `
+    const { Ledger } = require(${JSON.stringify(path.join(__dirname, '..', 'src', 'ledger'))});
+    const { issueProductionTII } = require(${JSON.stringify(path.join(__dirname, '..', 'src', 'production-issuance'))});
+    const l = new Ledger(${JSON.stringify(file)}).load();
+    let result = null, err = null;
+    for (let attempt = 0; attempt < 30; attempt++) {
+      try {
+        result = issueProductionTII(l, {
+          env: process.env,
+          checkpointDir: ${JSON.stringify(checkpointDir)},
+          recorder: { id: 'concurrent', kind: 'mechanism' },
+          content: { note: 'concurrency' },
+          idempotency_key: 'G6-CONCURRENT',
+        });
+        err = null;
+        break;
+      } catch (e) {
+        err = e.code || e.message;
+        if (e.code === 'writer-locked' || e.code === 'production-gate-closed') continue;
+        break;
+      }
+    }
+    process.stdout.write(JSON.stringify({ tii: result ? result.tii : null, replay: result ? !!result.idempotent_replay : null, err }));
+    `
+  );
+
+  const { spawn } = require('node:child_process');
+  const N = 8;
+  const outputs = await Promise.all(
+    Array.from({ length: N }, () => new Promise((resolve, reject) => {
+      const child = spawn(process.execPath, [workerFile], { env });
+      let out = '', errOut = '';
+      child.stdout.on('data', (d) => (out += d));
+      child.stderr.on('data', (d) => (errOut += d));
+      child.on('exit', (code) => (code === 0 ? resolve(out) : reject(new Error('worker exited ' + code + '\n' + errOut))));
+    }))
+  );
+  const results = outputs.map((o) => JSON.parse(o));
+  const successes = results.filter((r) => r.tii);
+  assert.ok(successes.length >= 1, 'at least one worker must succeed');
+  const distinctTiis = new Set(successes.map((r) => r.tii));
+  assert.equal(distinctTiis.size, 1, 'all successful workers must agree on the SAME tii — no duplicate issuance under concurrency');
+
+  const finalLedger = new Ledger(file).load();
+  assert.equal(finalLedger.events.filter((e) => e.event_type === 'tii.issued').length, 1, 'exactly one canonical tii.issued event, regardless of how many concurrent callers used the same idempotency_key');
+  assert.equal(finalLedger.verify().ok, true, 'canonical ledger integrity holds after concurrent same-key issuance attempts');
+});
+
 /* -------------------------------------------------- §6 test/production separation --- */
 
 test('§6 identifier_status is never "test" for a production issuance nor "production" for a test issuance', () => {

@@ -255,17 +255,17 @@ in-memory cache — this was proven in the adversarial-verification phase
 `ledger.append()`, inheriting this property directly rather than
 reimplementing it.
 
-> **Correction (2026-09-15):** the last sentence above does not hold for
-> `issueProductionTII()` specifically — it inherits the *safety*
+> **Correction (2026-09-15):** the last sentence above did not hold for
+> `issueProductionTII()` specifically — it inherited the *safety*
 > property (no duplicate/corrupted issuance) but not the *graceful
-> same-result-on-retry* property, because it generates a fresh random
+> same-result-on-retry* property, because it generated a fresh random
 > candidate on every call rather than replaying a caller-supplied one.
-> See "Pre-G9 final launch audit" at the end of this document for the
-> full finding and the corrected recovery guidance.
+> **Fixed the same day** — see "G6/G14 idempotency repair" at the end of
+> this document for the full finding, the fix, and the proof.
 
-**Status: PASS for the general ledger-append mechanism proven above;
-CONDITIONAL PASS overall — see the correction just above and the closure
-note at the end of this document.**
+**Status: PASS.** (Briefly CONDITIONAL PASS on 2026-09-15 between the
+finding above and the fix recorded at the end of this document — see
+that closure note for the repair and its proof.)
 
 ## §G7 — Permanent resolver domain
 
@@ -467,13 +467,14 @@ self-certifying claims) cross-referenced to
 **Not executed. Step 11 onward was not performed.**
 
 > **Correction (2026-09-15):** the "explicit idempotent-retry guidance"
-> referenced above was itself found inaccurate by direct rehearsal and
-> has been corrected in `spec/first-production-issuance-procedure.md`.
-> See "Pre-G9 final launch audit" at the end of this document.
+> referenced above was itself found inaccurate by direct rehearsal, then
+> **fixed the same day** in both code and
+> `spec/first-production-issuance-procedure.md`. See "G6/G14 idempotency
+> repair" at the end of this document for the full finding, the fix, and
+> the proof.
 
-**Status: PASS for the procedure's structure and content discipline;
-CONDITIONAL PASS overall pending review of the corrected recovery
-guidance — see the correction just above.**
+**Status: PASS.** (Briefly CONDITIONAL PASS on 2026-09-15 between the
+finding above and the fix recorded at the end of this document.)
 
 ---
 
@@ -564,7 +565,7 @@ non-promotion tests.
 | G3 — Key custody | **PASS** *(resolved 2026-09-13 — see the closure note appended at the end of this document)* |
 | G4 — Signed checkpoints | **PASS** |
 | G5 — Writer safety | **PASS** |
-| G6 — Recovery/idempotency | **CONDITIONAL PASS** *(downgraded 2026-09-15 — see the correction note appended at the end of this document)* |
+| G6 — Recovery/idempotency | **PASS** *(briefly downgraded and re-closed same day, 2026-09-15 — see "G6/G14 idempotency repair" appended at the end of this document)* |
 | G7 — Resolver | **PASS** *(resolved 2026-09-12 — see the closure note appended at the end of this document)* |
 | G8 — Governance | **PASS** *(resolved 2026-09-11 — see the closure note appended at the end of this document)* |
 | G9 — IANA | **PENDING IANA** *(submitted 2026-09-13 — see the closure note appended at the end of this document)* |
@@ -572,7 +573,7 @@ non-promotion tests.
 | G11 — Security | **PASS** |
 | G12 — Reconstruction/succession | **PASS** |
 | G13 — Release artifacts | **PASS** *(accepted 2026-09-12 — see the closure note appended at the end of this document)* |
-| G14 — First-issuance procedure | **CONDITIONAL PASS** *(downgraded 2026-09-15 — see the correction note appended at the end of this document)* |
+| G14 — First-issuance procedure | **PASS** *(briefly downgraded and re-closed same day, 2026-09-15 — see "G6/G14 idempotency repair" appended at the end of this document)* |
 
 ## OVERALL LAUNCH STATUS: **NOT READY**
 
@@ -1004,3 +1005,84 @@ own instruction.
 **Remaining non-PASS launch gates: G6 (CONDITIONAL PASS), G9 (PENDING
 IANA), G14 (CONDITIONAL PASS). Overall launch status remains NOT READY.
 Production issuance remains DISABLED.**
+
+## G6/G14 idempotency repair (appended 2026-09-15, same day) — G6, G14: CONDITIONAL PASS → PASS
+
+**Root cause.** `issueProductionTII()` (`src/production-issuance.js`)
+drew a fresh random candidate token on every call, including a retry —
+so the ledger's idempotency check (`existing.tii === partial.tii`) never
+matched on retry, and a same-key retry threw
+`"already used for a different operation"` instead of returning the
+original result. `Ledger.issueTII()` (the test path) already resolved
+idempotent replay *before* drawing randomness; `issueProductionTII()`
+never had the equivalent check.
+
+**Fix.** Added `Ledger.findByIdempotencyKey(key)` (`src/ledger.js`) — a
+pure, read-only lookup reusing the existing, already-durable
+`_idempotency` map (rebuilt from the persisted `idempotency_key` field of
+every event on every `load()`, not an in-memory-only cache; survives
+process restart). `issueProductionTII()` now calls it **before** any
+RNG, collision check, append, or checkpoint: if a match exists and its
+`event_type` + `content` match what this call would produce, return that
+persisted event immediately (no new candidate, no new event, no new
+checkpoint); if a match exists with different content, fail closed with
+an explicit conflict error; if no match, proceed exactly as before. A
+second check in the retry loop's catch handler resolves the same-key
+race case under real concurrency: if `ledger.append()`'s own
+authoritative (post-writer-lock, post-resync) idempotency check rejects
+a losing candidate because a concurrent caller's identical request
+already won, that losing caller re-resolves by key and returns the
+winner's result instead of propagating an error. No ledger schema
+change; no new source of canonical truth; the smallest change that
+closes the gap.
+
+**Proof — 7 new permanent regression tests**
+(`test/production-gate.test.js`): same key + same intent returns the
+exact original result with zero new RNG calls, zero new events, zero new
+checkpoints; replay survives a process restart (fresh `Ledger` instance);
+same key + different intent fails closed; no key behaves ordinarily;
+a genuine token collision on the first execution still retries correctly
+alongside an idempotency key; retry after a failed checkpoint enters the
+existing checkpoint-recovery path without minting a second identifier;
+and a real multi-process concurrency test (8 concurrent OS processes,
+same idempotency key) converges on exactly one canonical event and one
+`tii`. Full suite: 192/192 passing (185 prior + 7 new), re-run three
+times for confidence, zero flakiness.
+
+**Proof — disposable end-to-end rehearsal**, exactly reproducing the
+task's own required sequence: Call 1 (key K) → candidate X; Call 2 (same
+K, same process) → returns X, no new RNG draw; process restart; Call 3
+(same K, fresh `Ledger` instance) → returns X, still no new RNG draw
+across all three calls (CSPRNG invoked exactly once, total). Verified
+after: exactly one canonical `tii.issued` event, exactly one distinct
+`tii`, ledger chain valid, checkpoint `VERIFIED` and
+`matches_current_head: true`. The real repository ledger was confirmed
+byte-identical before and after (SHA-256
+`6882290be03e67ffd6abddafbfcccdf5a0a44b1cf4770d6f4763ce786c0d85fd`) —
+every step of this repair and its proof ran against disposable state
+only.
+
+**Documentation corrected**, not merely re-asserted:
+`spec/first-production-issuance-procedure.md`'s interruption-recovery
+section now describes the actual (fixed) behavior, states the exact
+semantics ("an idempotency key identifies one logical issuance request;
+a completed retry returns the original result; reuse for a different
+request fails closed"), and explicitly declines to claim exactly-once
+execution in the broader distributed-systems sense — the accurate,
+narrower claim is durable idempotent replay for this project's
+single-authoritative-writer model, which is what was actually proven.
+
+**G6 — Recovery/idempotency: PASS.** Restart-safe idempotent replay is
+proven; a retry after a checkpoint-recovery window does not duplicate
+issuance; conflicting key reuse fails closed.
+
+**G14 — First-issuance procedure: PASS.** The procedure's documented
+retry guidance now matches actual, tested behavior; the isolated
+first-issuance rehearsal passed end-to-end, including through a process
+restart.
+
+No ledger mutation, no identifier-syntax change, no production issuance,
+no key rotation, no new IANA submission. G3, G7, G8, G9, G13 untouched.
+
+**Remaining non-PASS launch gate: G9 (PENDING IANA) only. Overall launch
+status remains NOT READY. Production issuance remains DISABLED.**

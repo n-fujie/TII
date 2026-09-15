@@ -156,6 +156,34 @@
       "keys_rotated": false,
       "another_iana_submission_made": false,
       "gate_changed": "G6 PASS -> CONDITIONAL_PASS; G14 PASS -> CONDITIONAL_PASS (concrete new contradictory evidence found by rehearsal); G9 unchanged (PENDING_IANA); G3/G7/G8/G13 unchanged (PASS)"
+    },
+    {
+      "date": "2026-09-15",
+      "trigger": "G6/G14 idempotency repair -- same-day fix for the finding above",
+      "root_cause": "issueProductionTII() (src/production-issuance.js) drew a fresh random candidate on every call, including a retry, so the ledger's idempotency check (existing.tii === partial.tii) never matched on retry",
+      "fix": "added Ledger.findByIdempotencyKey(key) (src/ledger.js) -- a pure read-only lookup reusing the existing durable _idempotency map (rebuilt from persisted idempotency_key on every load(), survives restart); issueProductionTII() now resolves idempotent replay via this lookup BEFORE any RNG, collision check, append, or checkpoint; a second check in the retry loop's catch handler resolves the same-key concurrency race case by re-checking after a losing append attempt. No ledger schema change; no new source of canonical truth.",
+      "new_tests": 7,
+      "test_suite_after": "192/192 passing (185 prior + 7 new), re-run 3 times, zero flakiness",
+      "rehearsal_proof": {
+        "sequence": "call1(key K)->X; call2(same K, same process)->X, no new RNG draw; process restart; call3(same K, fresh Ledger instance)->X, still no new RNG draw",
+        "total_rng_calls_across_three_calls": 1,
+        "canonical_issuance_events": 1,
+        "distinct_tiis": 1,
+        "ledger_chain_valid": true,
+        "checkpoint_status": "VERIFIED",
+        "checkpoint_matches_current_head": true
+      },
+      "concurrency_proof": "8 concurrent OS processes, same idempotency_key -> converged on exactly 1 canonical event and 1 tii",
+      "documentation_corrected": "spec/first-production-issuance-procedure.md's interruption-recovery section now describes the fixed behavior and states the exact semantics without overclaiming broader distributed exactly-once execution",
+      "real_ledger_untouched": true,
+      "real_ledger_sha256": "6882290be03e67ffd6abddafbfcccdf5a0a44b1cf4770d6f4763ce786c0d85fd",
+      "production_issuance_enabled": false,
+      "production_tii_issued": false,
+      "keys_rotated": false,
+      "g9_modified": false,
+      "g3_g7_g8_g13_reopened": false,
+      "another_iana_submission_made": false,
+      "gate_changed": "G6 CONDITIONAL_PASS -> PASS; G14 CONDITIONAL_PASS -> PASS; G9 unchanged (PENDING_IANA); G3/G7/G8/G13 unchanged (PASS)"
     }
   ],
 
@@ -190,7 +218,7 @@
     "G3_key_custody": "PASS",
     "G4_signed_checkpoints": "PASS",
     "G5_writer_safety": "PASS",
-    "G6_recovery_idempotency": "CONDITIONAL_PASS",
+    "G6_recovery_idempotency": "PASS",
     "G7_resolver": "PASS",
     "G8_governance": "PASS",
     "G9_iana": "PENDING_IANA",
@@ -198,7 +226,7 @@
     "G11_security": "PASS",
     "G12_reconstruction_succession": "PASS",
     "G13_release_artifacts": "PASS",
-    "G14_first_issuance_procedure": "CONDITIONAL_PASS"
+    "G14_first_issuance_procedure": "PASS"
   },
 
   "legacy_fields_for_readability": {
@@ -291,12 +319,12 @@
 
   "final_closure_table": [
     { "gate": "G3", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- final key 1486de6152baec7f generated 2026-09-13, ACTIVE FOR CHECKPOINT SIGNING, independently verified end to end by the agent; see spec/production-key-custody.md section 8.7. Does not enable production issuance." },
-    { "gate": "G6", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": "issueProductionTII()'s idempotency_key does not provide graceful same-result-on-retry as documented (fails closed with a clear error instead, no duplicate/corruption) -- found by rehearsal 2026-09-15, documentation corrected, code unchanged", "next_irreversible_action": "optional future task: fix issueProductionTII() to look up and return the existing event when a retry's idempotency_key collides, OR accept the corrected manual-lookup recovery guidance in spec/first-production-issuance-procedure.md as sufficient" },
+    { "gate": "G6", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- issueProductionTII() now resolves idempotent replay before any RNG/append/checkpoint (Ledger.findByIdempotencyKey(), src/ledger.js), proven by 7 new regression tests plus a disposable end-to-end rehearsal including a process restart and an 8-process concurrency test; fixed and re-closed 2026-09-15, same day as the finding -- see spec/production-launch-gate.md's 'G6/G14 idempotency repair' note" },
     { "gate": "G7", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- transition-ignition-id.org purchased via Vercel Registrar 2026-09-12, independently verified (Vercel CLI + live RDAP), DNS/HTTPS/resolver-base/all public routes confirmed live, see spec/resolver-domain-decision.md sections 16-18" },
     { "gate": "G8", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- resolved via explicit human confirmation, see spec/human-decisions.md" },
     { "gate": "G9", "status": "PENDING_IANA", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": "submitted to IANA 2026-09-13 (Provisional, tii, via https://www.iana.org/form/protocol-assignment); submission is not registration -- tii does not yet appear in the official registry", "next_irreversible_action": "once IANA responds: verify the response, then independently re-check https://www.iana.org/assignments/uri-schemes/uri-schemes.xhtml for an actual tii entry under Provisional status. G9 becomes PASS only then." },
     { "gate": "G13", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- accepted via explicit steward decision 2026-09-12, see spec/human-decisions.md and spec/production-launch-gate.md's G13 closure note" },
-    { "gate": "G14", "status": "CONDITIONAL_PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": "the procedure's interruption-recovery guidance (step 13) relied on the same incorrect idempotency-retry assumption as G6 -- corrected in place 2026-09-15", "next_irreversible_action": "none required -- corrected guidance is in effect; review recommended before the real procedure is run" }
+    { "gate": "G14", "status": "PASS", "technical_work_complete": true, "human_decision_required": [], "external_action_required": false, "blocker": null, "next_irreversible_action": "none -- spec/first-production-issuance-procedure.md's interruption-recovery guidance now matches actual, tested behavior (simple same-key retry, no manual workaround needed); fixed and re-closed 2026-09-15, same day as the finding" }
   ],
 
   "release_artifacts_acceptance": {
@@ -325,7 +353,6 @@
 
   "blockers_remaining": [
     "G9 IANA: submitted 2026-09-13 (Provisional, tii, Contact/Change Controller Naoto Fujie <platodesign@icloud.com>, spec https://transition-ignition-id.org/spec). Submission is not registration -- tii does not yet appear in the official registry. G9 = PENDING IANA. Becomes PASS only once independently re-checked and found actually registered.",
-    "G6/G14: issueProductionTII()'s idempotency_key does not gracefully return the original result on retry (throws instead; no duplicate/corruption risk) -- found by rehearsal 2026-09-15, documentation corrected, code unchanged. Optional future fix, not blocking.",
     "TII_PRODUCTION_ISSUANCE_ENABLED is not set to 'true' anywhere in the committed configuration, and no override was made by this task.",
     "TII_GOVERNANCE_APPROVED and TII_RESOLVER_APPROVED (the software-level production-gate flags) remain unset even though the underlying G7/G8 launch gates are now PASS -- these are a deliberate separate switch, not automatically derived, so production issuance stays blocked by src/production-gate.js regardless of gate-table status."
   ],

@@ -152,24 +152,48 @@ original exactly, so a retry's new random candidate never matches and
 the retry throws `idempotency_key "..." was already used for a different
 operation` — safely (no duplicate is ever created), but not gracefully.
 
-**If step 13 is interrupted (no response observed):**
+**FIXED 2026-09-15 (G6/G14 idempotency repair) — the manual workaround
+below is no longer necessary, and is kept only as a historical record of
+the gap between 2026-09-15's two audits.** `issueProductionTII()`
+(`src/production-issuance.js`) now resolves an idempotent replay
+**before** drawing any randomness, checking, or appending — mirroring
+the pattern `Ledger.issueTII()` (the test path) already used correctly.
+Proven directly, both as a permanent regression suite
+(`test/production-gate.test.js`, 8 new tests, including a real
+multi-process concurrency test and a restart-survival test using a fresh
+`Ledger` instance) and as a disposable end-to-end rehearsal (three calls
+— original, same-process retry, and post-restart retry — all returned
+the identical original `tii`, with the CSPRNG invoked exactly once
+across all three calls).
 
-1. **Do not immediately retry.** First check whether the original attempt
-   actually committed: search the ledger for an event carrying the same
-   `idempotency_key` used in step 13 (e.g. scan `data/ledger.jsonl` for
-   that key, or use `tii show <tii>` if the candidate is somehow known).
-2. **If a matching event is found:** that is the real, successful result
-   of step 13. Use its `tii` — do not retry, do not treat this as
-   incomplete. Continue to step 14 using that identifier.
-3. **If no matching event is found:** the append never committed (or was
-   rolled back by the writer lock / recovery machinery before completing).
-   Retrying step 13 is safe — it will mint a genuinely new, different
-   candidate, exactly as a fresh first attempt would.
-4. This gap — `issueProductionTII()`'s idempotency_key not providing a
-   graceful same-result retry, unlike the general `ledger.append()` path
-   used elsewhere — was discovered by direct rehearsal against disposable
-   state before this procedure was ever run for real, specifically so it
-   would not be discovered mid-event. A future task may close this gap in
-   code (e.g. having `issueProductionTII()` look up and return the
-   existing event on this specific error); until then, follow steps 1–3
-   above.
+**If step 13 is interrupted (no response observed): simply retry step 13
+with the same `idempotency_key` and the same content.** This is now
+accurate again:
+
+- If the original attempt already committed, the retry returns the
+  exact original result — no new candidate is drawn, no new event is
+  appended, no new checkpoint is created. This holds even across a
+  process restart (the check is durable, derived from the persisted
+  `idempotency_key` field on every event, not an in-memory cache).
+- If the original attempt never committed, the retry proceeds as a
+  genuinely fresh issuance.
+- If the retry uses the same `idempotency_key` but materially different
+  content, it fails closed with an explicit conflict error — it is never
+  silently merged and never produces a duplicate.
+- The one caveat inherited from the existing, separate checkpoint-currency
+  policy (step 17, `spec/production-launch-gate.md` §16/§17): if the
+  original attempt's checkpoint step failed, the production gate itself
+  stays closed (`checkpoint_current: false`) until an operator restores
+  currency via `tii checkpoint create` — a retry attempted in that window
+  receives `ProductionGateClosedError`, not a replay. Restore currency
+  first, then retry; the retry will correctly return the original result,
+  never mint a second identifier for the same key.
+
+**Exact semantics:** an idempotency key identifies one logical issuance
+request. A completed retry returns the original result; reuse for a
+different request fails closed. This is **durable idempotent replay for
+the authoritative single-writer issuance path** — not a claim of
+exactly-once execution in the broader distributed-systems sense (there is
+one authoritative writer process at a time, by design; this mechanism has
+not been proven, and does not need to be proven, against a distributed
+multi-writer topology this project does not have).

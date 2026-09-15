@@ -741,3 +741,41 @@ Provisional status; an acknowledgment, ticket, or confirmation email is
 not sufficient by itself. **Overall launch status: still NOT READY.
 Production issuance remains DISABLED.** G3/G7/G8/G13 were not reopened;
 the canonical ledger was not modified.
+
+## G6/G14 — found by rehearsal, fixed same day (2026-09-15)
+
+A pre-G9 final launch audit's first-production-issuance rehearsal (run
+against disposable state only) found that `issueProductionTII()`'s
+idempotency_key did not gracefully return the original result on retry —
+it drew a fresh random candidate every call, so retries threw instead of
+replaying. No duplicate or corrupted identifier could ever result (it
+failed closed), but the documented recovery contract did not hold. G6
+and G14 were downgraded PASS → CONDITIONAL PASS, reopened specifically
+because concrete new contradictory evidence was found.
+
+The same day, the gap was closed: `Ledger.findByIdempotencyKey()`
+(`src/ledger.js`) plus a pre-RNG check in `issueProductionTII()`
+(`src/production-issuance.js`) — the smallest change, reusing the
+already-durable idempotency map rather than adding a new source of
+truth. Proven by 7 new regression tests (192/192 total, 3 clean runs)
+and a disposable rehearsal matching the exact required sequence: call →
+retry (same process) → restart → retry again, all returning the
+identical original identifier, the CSPRNG invoked exactly once across
+all three calls. A real 8-process concurrency test converged on exactly
+one canonical event. `spec/first-production-issuance-procedure.md`'s
+recovery guidance was corrected to match. **G6 and G14: PASS.**
+
+```
+G3  Production key custody   PASS
+G6  Recovery/idempotency     PASS
+G7  Permanent resolver       PASS
+G8  Governance               PASS
+G9  IANA                     PENDING IANA
+G13 Release artifacts        PASS
+G14 First-issuance procedure PASS
+```
+
+**Remaining non-PASS launch gate: G9 (PENDING IANA) only. Overall launch
+status: still NOT READY. Production issuance remains DISABLED.** No
+production TII issued, no keys rotated, no new IANA submission, G3/G7/G8/G13
+not reopened, the real canonical ledger not modified.

@@ -113,6 +113,29 @@ class Ledger {
     return this._byEventId.get(id) || null;
   }
 
+  /**
+   * Look up a previously-recorded event by idempotency_key, with no side
+   * effects. Returns the persisted event, or null if this key has never
+   * been used. `_idempotency` is durably rebuilt from the persisted
+   * `idempotency_key` field of every event on every load() (see _index()
+   * above and the class doc's crash-recovery note) — not an in-memory-only
+   * cache — so this survives process restart exactly like the rest of the
+   * ledger's state.
+   *
+   * Exists so a CALLER (e.g. src/production-issuance.js) can resolve an
+   * idempotent replay BEFORE doing any of its own work that must not be
+   * repeated for a replay — generating a random candidate, checking it for
+   * collision, signing a checkpoint — not only at append()-time, which is
+   * too late for callers whose own pre-append work has side effects
+   * (like drawing fresh randomness) that must never differ between a
+   * request and its replay.
+   */
+  findByIdempotencyKey(key) {
+    if (!key) return null;
+    const eventId = this._idempotency.get(key);
+    return eventId ? this.getEvent(eventId) : null;
+  }
+
   listTIIs() {
     return [...this._issuedTII];
   }
