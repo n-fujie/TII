@@ -133,13 +133,43 @@ A CONDITIONAL PASS gate must be resolved to a firm PASS first.
 ## Recovery if this procedure is interrupted mid-way
 
 Every step from 13 onward that touches the ledger is protected by the same
-crash-safety and idempotency machinery verified in
-`spec/phase1-adversarial-verification.md` §8/§9: an interruption after step
-13 but before a response is observed is handled by retrying step 13 with
-the **same** `idempotency_key` — the gated issuance path accepts one via
-`opts.idempotency_key` exactly like the test path does
-(`src/production-issuance.js`) — which returns the original result rather
-than minting a second production identifier. If the interruption looks like
-anything more structurally ambiguous (a malformed tail, an orphaned
-journal), stop and run `tii recover inspect` before any retry, exactly as
+crash-safety machinery verified in
+`spec/phase1-adversarial-verification.md` §8/§9 — a malformed tail or an
+orphaned journal is always detected, never silently accepted; stop and run
+`tii recover inspect` before any retry if either is present, exactly as
 for any other write — see `spec/crash-recovery.md`.
+
+**CORRECTED 2026-09-15 (pre-G9 final launch audit — see
+`spec/production-launch-gate.md`'s "Pre-G9 final launch audit" note for
+the full finding).** This section previously said an interruption after
+step 13 could be recovered by "retrying step 13 with the same
+`idempotency_key`... which returns the original result." **That is not
+what `issueProductionTII()` does, and following that instruction
+literally will fail.** `issueProductionTII()` generates a fresh random
+candidate token on every call, including a retry; the ledger's
+idempotency check requires the retried event's `tii` to match the
+original exactly, so a retry's new random candidate never matches and
+the retry throws `idempotency_key "..." was already used for a different
+operation` — safely (no duplicate is ever created), but not gracefully.
+
+**If step 13 is interrupted (no response observed):**
+
+1. **Do not immediately retry.** First check whether the original attempt
+   actually committed: search the ledger for an event carrying the same
+   `idempotency_key` used in step 13 (e.g. scan `data/ledger.jsonl` for
+   that key, or use `tii show <tii>` if the candidate is somehow known).
+2. **If a matching event is found:** that is the real, successful result
+   of step 13. Use its `tii` — do not retry, do not treat this as
+   incomplete. Continue to step 14 using that identifier.
+3. **If no matching event is found:** the append never committed (or was
+   rolled back by the writer lock / recovery machinery before completing).
+   Retrying step 13 is safe — it will mint a genuinely new, different
+   candidate, exactly as a fresh first attempt would.
+4. This gap — `issueProductionTII()`'s idempotency_key not providing a
+   graceful same-result retry, unlike the general `ledger.append()` path
+   used elsewhere — was discovered by direct rehearsal against disposable
+   state before this procedure was ever run for real, specifically so it
+   would not be discovered mid-event. A future task may close this gap in
+   code (e.g. having `issueProductionTII()` look up and return the
+   existing event on this specific error); until then, follow steps 1–3
+   above.

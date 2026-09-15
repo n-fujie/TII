@@ -255,7 +255,17 @@ in-memory cache — this was proven in the adversarial-verification phase
 `ledger.append()`, inheriting this property directly rather than
 reimplementing it.
 
-**Status: PASS.**
+> **Correction (2026-09-15):** the last sentence above does not hold for
+> `issueProductionTII()` specifically — it inherits the *safety*
+> property (no duplicate/corrupted issuance) but not the *graceful
+> same-result-on-retry* property, because it generates a fresh random
+> candidate on every call rather than replaying a caller-supplied one.
+> See "Pre-G9 final launch audit" at the end of this document for the
+> full finding and the corrected recovery guidance.
+
+**Status: PASS for the general ledger-append mechanism proven above;
+CONDITIONAL PASS overall — see the correction just above and the closure
+note at the end of this document.**
 
 ## §G7 — Permanent resolver domain
 
@@ -456,7 +466,14 @@ self-certifying claims) cross-referenced to
 
 **Not executed. Step 11 onward was not performed.**
 
-**Status: PASS.**
+> **Correction (2026-09-15):** the "explicit idempotent-retry guidance"
+> referenced above was itself found inaccurate by direct rehearsal and
+> has been corrected in `spec/first-production-issuance-procedure.md`.
+> See "Pre-G9 final launch audit" at the end of this document.
+
+**Status: PASS for the procedure's structure and content discipline;
+CONDITIONAL PASS overall pending review of the corrected recovery
+guidance — see the correction just above.**
 
 ---
 
@@ -547,7 +564,7 @@ non-promotion tests.
 | G3 — Key custody | **PASS** *(resolved 2026-09-13 — see the closure note appended at the end of this document)* |
 | G4 — Signed checkpoints | **PASS** |
 | G5 — Writer safety | **PASS** |
-| G6 — Recovery/idempotency | **PASS** |
+| G6 — Recovery/idempotency | **CONDITIONAL PASS** *(downgraded 2026-09-15 — see the correction note appended at the end of this document)* |
 | G7 — Resolver | **PASS** *(resolved 2026-09-12 — see the closure note appended at the end of this document)* |
 | G8 — Governance | **PASS** *(resolved 2026-09-11 — see the closure note appended at the end of this document)* |
 | G9 — IANA | **PENDING IANA** *(submitted 2026-09-13 — see the closure note appended at the end of this document)* |
@@ -555,7 +572,7 @@ non-promotion tests.
 | G11 — Security | **PASS** |
 | G12 — Reconstruction/succession | **PASS** |
 | G13 — Release artifacts | **PASS** *(accepted 2026-09-12 — see the closure note appended at the end of this document)* |
-| G14 — First-issuance procedure | **PASS** |
+| G14 — First-issuance procedure | **CONDITIONAL PASS** *(downgraded 2026-09-15 — see the correction note appended at the end of this document)* |
 
 ## OVERALL LAUNCH STATUS: **NOT READY**
 
@@ -906,3 +923,84 @@ G3, G7, G8, G13 untouched (all remain PASS).
 
 **Remaining non-PASS launch gate: G9 (PENDING IANA). Overall launch
 status remains NOT READY. Production issuance remains DISABLED.**
+
+## Pre-G9 final launch audit (appended 2026-09-15) — G6, G14: PASS → CONDITIONAL PASS
+
+A full audit of every gate not blocked on IANA, plus a first-production-
+issuance rehearsal against entirely disposable state (its own temp
+ledger, its own disposable Ed25519 key, never the real
+`data/ledger.jsonl` — confirmed byte-identical before/after, SHA-256
+`6882290be03e67ffd6abddafbfcccdf5a0a44b1cf4770d6f4763ce786c0d85fd`),
+found one genuine discrepancy between documentation and implementation.
+
+**Finding:** `spec/first-production-issuance-procedure.md`'s "Recovery if
+this procedure is interrupted mid-way" section, and this document's §G6,
+both claim that retrying `issueProductionTII()` with the same
+`idempotency_key` "returns the original result rather than minting a
+second production identifier." **This is not what the code does.**
+`issueProductionTII()` draws a fresh random candidate token on every
+call — including a retry — and `Ledger._validateAppend()`'s idempotency
+check requires the retried event's `tii` to match the original
+(`src/ledger.js` line ~190: `existing.tii === partial.tii`). Since the
+retry's randomly-generated candidate is never the same string as the
+first attempt's, the check correctly finds a mismatch and throws
+`idempotency_key "..." was already used for a different operation` —
+**not** a silent duplicate, **not** data corruption, but also **not**
+the graceful "same result returned" the documentation promises.
+
+Proven directly, live, this phase (disposable state only):
+```
+Call 1: issueProductionTII(..., idempotency_key: "rehearsal-idem-1") -> tii:otrvymhoyotmrlpm2qtex2ziay, appended, checkpointed
+Call 2: issueProductionTII(..., idempotency_key: "rehearsal-idem-1") -> THROWS "already used for a different operation"
+        (expected per the existing docs: should have returned tii:otrvymhoyotmrlpm2qtex2ziay again, no new event)
+```
+
+**Severity: the safety property holds — no duplicate or corrupted
+production identifier can ever result from a retry.** The gap is in the
+*documented recovery contract*: an operator following
+`spec/first-production-issuance-procedure.md` step 13's interruption
+guidance literally, during the real (single, highest-stakes) production
+issuance, would be told to "retry with the same idempotency_key" and
+would instead receive a thrown error, unless they already knew to
+instead search the ledger for the event carrying that idempotency_key.
+This was caught by rehearsal specifically so it would not be discovered
+for the first time during the real event.
+
+**Corrected recovery guidance** (`spec/first-production-issuance-procedure.md`
+was updated accordingly — see that file's own correction note): on an
+interrupted step 13, do not blindly retry. First check whether an event
+with the same `idempotency_key` already exists in the ledger (e.g. `tii
+list` / a ledger scan for that key). If it does, that is the original,
+successful result — use it, do not retry. If it does not, the append
+never committed; retrying is safe (it will mint a genuinely new
+candidate, as intended).
+
+**Not fixed in code.** Changing `issueProductionTII()`'s behavior (e.g.
+having it look up and return the existing event on this specific error)
+would be a functional change to gated production-issuance code, out of
+scope for an audit-and-rehearsal task — left for a separate, explicitly
+authorized task.
+
+**G6 — Recovery/idempotency: CONDITIONAL PASS.** The core mechanism
+(`ledger.append()` idempotency with a caller-supplied, stable `tii`) is
+proven correct and remains PASS-quality on its own. The composed
+behavior through `issueProductionTII()` specifically does not match its
+own documentation and is downgraded until either the code or the
+documented contract is reconciled.
+
+**G14 — First-issuance procedure: CONDITIONAL PASS.** The 22-step
+procedure is otherwise sound and unchanged; its interruption-recovery
+guidance has been corrected in place. Downgraded because the discovery
+happened during audit, not before this document was first accepted as
+PASS, and the correction should be reviewed before the real event relies
+on it.
+
+No ledger mutation, no identifier-syntax change, no production issuance,
+no key rotation. G3, G7, G8, G13 untouched (all remain PASS) — not
+reopened without evidence; G6 and G14 **were** reopened, specifically
+because concrete new contradictory evidence was found, per this task's
+own instruction.
+
+**Remaining non-PASS launch gates: G6 (CONDITIONAL PASS), G9 (PENDING
+IANA), G14 (CONDITIONAL PASS). Overall launch status remains NOT READY.
+Production issuance remains DISABLED.**
