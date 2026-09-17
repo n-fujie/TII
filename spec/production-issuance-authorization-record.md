@@ -5,16 +5,41 @@
 > fully-referenced state of the repository. Production issuance remains
 > DISABLED. No identifier has been issued under this record.
 
-## Commit being authorized
+## Executable state under review vs. this record's own commit
+
+**The executable/code state under review is commit `c809909`.**
 
 ```
 c809909  Fix issueTII() idempotency content check; found by a live end-to-end rehearsal
 ```
 
-This is `HEAD` of `main` at the time this record was created. If any
-further commit lands before a human authorization decision is made, this
-record must be re-issued against the new commit — it is not
-transferable to a different commit by inference.
+This record was itself added in a separate, later commit,
+**`1d7312a`**. That commit adds only this document — it does not change
+executable behavior, identifier semantics, ledger state, gate state, or
+production-issuance availability. `c809909` remains the exact executable
+state a human authorization decision would apply to; `1d7312a` (and this
+amendment) are part of the authorization *process*, not part of what is
+being authorized.
+
+**Documentation-only commits that merely record the authorization
+process do not invalidate the reviewed executable state**, provided they
+do not modify:
+- executable code,
+- configuration affecting runtime behavior,
+- ledger contents,
+- identifier semantics,
+- issuance logic, or
+- gate conditions.
+
+`1d7312a` and this amendment satisfy that condition — confirmed below by
+re-running the full suite and re-verifying the ledger and gate state
+after each.
+
+**Any subsequent commit that DOES touch one of those six categories
+invalidates this authorization and requires a new review** against the
+new commit — this record is not transferable to a different executable
+state by inference, and a documentation commit does not extend it to
+cover a later code change either.
 
 ## What is being referenced (completed, not repeated here)
 
@@ -107,6 +132,28 @@ not re-argued:
   `production_requested`, `governance_approved`, `resolver_approved`,
   `iana_gate_satisfied`, `signing_ready`, `checkpoint_current` — none of
   which is set in the committed configuration.
+
+### Re-verified after the procedural clarification amendment
+
+The amendment above (distinguishing the reviewed executable state,
+`c809909`, from this record's own documentation commits) touched only
+this file. Re-ran the same verification afterward:
+
+- Full test suite: **242/242 passing**.
+- Canonical ledger: **byte-identical**, same SHA-256
+  (`6882290be03e67ffd6abddafbfcccdf5a0a44b1cf4770d6f4763ce786c0d85fd`)
+  and head hash
+  (`eb27a2b7a557465b1301e7225052d03b6fc1550caa7b9ea943e5e90835427e95`)
+  as above, `verify().ok === true`.
+- Production gate: confirmed still closed —
+  `computeGateStatus(...).available === false`, same six blocking
+  conditions as above, unchanged.
+
+This confirms the amendment is itself a documentation-only commit under
+the rule stated above: it does not touch executable code, runtime
+configuration, ledger contents, identifier semantics, issuance logic, or
+gate conditions, and therefore does not invalidate `c809909` as the
+executable state under review.
 
 **Stopping here, before any change to the production gate**, per this
 task's explicit instruction.
