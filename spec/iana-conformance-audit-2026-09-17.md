@@ -76,14 +76,35 @@ string lookup regardless of which profile issued the token). No ledger
 schema change, no new terminology, no redesign of the identifier scheme —
 the smallest fix that closes the gap.
 
-Proven by 8 new tests in `test/resolver.test.js`, spun up against the
-real `src/server.js` HTTP server (not a re-implementation): a
-fragment-bearing reference resolves identically to its fragment-free
-form; different fragments on the same base (`#a` vs `#b`) resolve to the
-identical result (the fragment carries no scheme-specific semantics, per
-the registration text); an unknown token with a fragment still correctly
-404s (fragment-stripping never produces a false positive); a bare `#`
-does not crash the resolver.
+**A second copy of the identical defect was found in the actually-deployed
+code path.** `transition-ignition-id.org` is a static mirror
+(`spec/resolver-domain-decision.md` §7) — it never runs `src/server.js`
+at all. The homepage's resolve form is instead intercepted by an inline
+client-side script (`src/views.js` `homePage()`) that computes the target
+slug itself and redirects, entirely independent of the server-side fix
+above. That script had the exact same gap: it converted a `#` into an
+underscore (`replace(/[^a-z0-9]+/g,'_')`) instead of stripping the
+fragment, so `tii:h4r3jsn4p25d#note` produced the slug
+`tii_h4r3jsn4p25d_note` — which does not exist — instead of resolving to
+the real identifier. **This was the actual, live behavior on the
+deployed production site**, unaffected by the `server.js` fix alone.
+Fixed with the same one-line strip, deployed via the standard
+`SPEC.md`-style rebuild-static → push → Vercel auto-build path, and
+independently re-verified live afterward (see "Live verification"
+below).
+
+Proven by 12 new tests in `test/resolver.test.js`: 8 against the real
+`src/server.js` HTTP server (not a re-implementation) covering the
+dynamic-server path, and 4 that execute the **actual shipped
+client-side script** (extracted from the real rendered HTML via Node's
+built-in `vm` module, not a hand-copied duplicate) against a minimal
+`document`/`window` stub, covering the static-deployment path
+independently. Both confirm: a fragment-bearing reference resolves
+identically to its fragment-free form; different fragments on the same
+base (`#a` vs `#b`) resolve to the identical result (the fragment
+carries no scheme-specific semantics, per the registration text); an
+unknown token with a fragment still correctly 404s (fragment-stripping
+never produces a false positive); a bare `#` does not crash either path.
 
 ## 5. Test coverage gap closed
 
@@ -114,11 +135,12 @@ Proven by 2 new tests in `test/resolver.test.js`.
 | Canonical form `tii:<token>` | Conformant | Unchanged |
 | Token opacity | Conformant | Unchanged |
 | Resolver separate from identity | Conformant | Unchanged |
-| RFC 3986 fragment semantics | **Non-conformant** (live resolver only) | **Fixed** |
+| RFC 3986 fragment semantics | **Non-conformant** (dynamic server AND, separately, the actually-deployed static site's client-side script) | **Fixed, both paths** |
 | Test profile parser/validator coverage | Sparse | Thorough (12 new tests) |
 | Registry API (live server) | Missing JSON endpoint | Added (`/catalog.json`, 2 new tests) |
 
-Full test suite: 214/214 passing (192 prior + 22 new). Canonical ledger
+Full test suite: 218/218 passing (192 prior + 26 new: 10 dynamic-resolver,
+4 static-client-script, 12 id.js parser/validator). Canonical ledger
 unchanged throughout. No identifier-syntax change, no new terminology, no
 production issuance, no gate status change (G1 and G7 remain PASS, as
 they already correctly were for the identifier-syntax and

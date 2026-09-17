@@ -225,6 +225,7 @@ function homePage({ lang }) {
 (function(){var f=document.querySelector('form.resolve');if(!f)return;
 f.addEventListener('submit',function(e){e.preventDefault();
 var v=(f.tii.value||'').trim().toLowerCase();if(!v){return;}
+var h=v.indexOf('#');if(h!==-1){v=v.slice(0,h);}if(!v){return;}
 if(v.indexOf('tii:')!==0){v='tii:'+v.replace(/^tii[:_]?/,'');}
 var slug=v.replace(/[^a-z0-9]+/g,'_');
 window.location.href=${JSON.stringify(base)}+'/tii/'+slug;});})();

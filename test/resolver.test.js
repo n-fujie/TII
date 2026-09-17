@@ -20,8 +20,10 @@ const os = require('node:os');
 const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
+const vm = require('node:vm');
 
 const { Ledger } = require('../src/ledger');
+const views = require('../src/views');
 
 function tmpLedgerFile() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tii-resolver-'));
@@ -154,6 +156,70 @@ test('resolver — /tii/<slug> resolves directly (HTTP never sends a fragment to
     await srv.close();
     srv.restoreEnv();
   }
+});
+
+/* ------------------------ static-deployment client-side resolve script --- *
+ * The DEPLOYED site (transition-ignition-id.org) is a static mirror — it
+ * never runs src/server.js at all. The homepage's resolve form is instead
+ * intercepted by an inline client-side script (src/views.js homePage()) that
+ * computes the target slug itself and redirects. This script had the exact
+ * same missing-fragment-handling defect as resolveIdentifier() above, and
+ * fixing server.js alone does not touch it. These tests execute the ACTUAL
+ * shipped script (extracted from the real rendered HTML via vm, not a
+ * hand-copied duplicate) so a future edit that reintroduces the bug here
+ * would be caught even if server.js stays correct. */
+
+function extractResolveScript(html) {
+  const m = html.match(/<script>([\s\S]*?)<\/script>/);
+  if (!m) throw new Error('resolve script not found in rendered homepage');
+  return m[1];
+}
+
+/** Run the real shipped script against a minimal document/window stub and
+ * return the href it navigated to after simulating a form submit. */
+function simulateResolveSubmit(script, typedValue) {
+  let capturedHandler = null;
+  const fakeForm = {
+    tii: { value: typedValue },
+    addEventListener: (evt, handler) => {
+      if (evt === 'submit') capturedHandler = handler;
+    },
+  };
+  const sandbox = {
+    document: { querySelector: (sel) => (sel === 'form.resolve' ? fakeForm : null) },
+    window: { location: { href: null } },
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(script, sandbox);
+  assert.ok(capturedHandler, 'the script must have registered a submit handler');
+  capturedHandler({ preventDefault: () => {} });
+  return sandbox.window.location.href;
+}
+
+test('static-deployment resolve script — bare token redirects to the correct slug', () => {
+  const script = extractResolveScript(views.homePage({ lang: 'en' }));
+  assert.equal(simulateResolveSubmit(script, 'tii:h4r3jsn4p25d'), '/tii/tii_h4r3jsn4p25d');
+});
+
+test('static-deployment resolve script — a fragment must not break resolution (this was the live bug on the deployed static site: fixed 2026-09-17)', () => {
+  const script = extractResolveScript(views.homePage({ lang: 'en' }));
+  assert.equal(
+    simulateResolveSubmit(script, 'tii:h4r3jsn4p25d#note'),
+    '/tii/tii_h4r3jsn4p25d',
+    'a #fragment must be stripped before the slug is computed, exactly like resolveIdentifier() on the dynamic server'
+  );
+});
+
+test('static-deployment resolve script — a bare trailing "#" also resolves to the base identifier', () => {
+  const script = extractResolveScript(views.homePage({ lang: 'en' }));
+  assert.equal(simulateResolveSubmit(script, 'tii:h4r3jsn4p25d#'), '/tii/tii_h4r3jsn4p25d');
+});
+
+test('static-deployment resolve script — different fragments on the same base produce the identical redirect target', () => {
+  const script = extractResolveScript(views.homePage({ lang: 'en' }));
+  const a = simulateResolveSubmit(script, 'tii:h4r3jsn4p25d#a');
+  const b = simulateResolveSubmit(script, 'tii:h4r3jsn4p25d#b');
+  assert.equal(a, b);
 });
 
 /* -------------------------------------------------------- registry API --- */
