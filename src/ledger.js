@@ -159,8 +159,18 @@ class Ledger {
    * on any path that reaches this method today.
    *
    * `idempotency_key`, if given, is checked BEFORE a new token is minted: a
-   * repeat with the same key returns the original (tii, event) pair instead
-   * of wasting/duplicating an issuance (要件25 of production-hardening Phase 1).
+   * repeat with the SAME key AND the SAME content returns the original
+   * (tii, event) pair instead of wasting/duplicating an issuance (要件25 of
+   * production-hardening Phase 1). A repeat with the same key but DIFFERENT
+   * content is a genuinely different request reusing the key — it fails
+   * closed (spec/issuance-path-audit-2026-09-19.md's rehearsal finding: this
+   * check used to compare only `event_type`, not `content`, so a caller
+   * could silently receive a different request's result under the same key
+   * with no error — the exact defect already found and fixed for
+   * issueProductionTII() in the G6/G14 repair, mirrored here for the general
+   * path). This pre-check exists (rather than relying solely on append()'s
+   * own _validateAppend(), which performs the same content comparison) so a
+   * confirmed replay never wastes a fresh candidate draw from newTII().
    */
   issueTII(opts = {}) {
     const {
@@ -173,11 +183,14 @@ class Ledger {
       idempotency_key,
     } = opts;
 
+    const intendedContent = { ...content, identifier_status };
+
     if (idempotency_key) {
       const existingId = this._idempotency.get(idempotency_key);
       if (existingId) {
         const existing = this.getEvent(existingId);
-        if (existing.event_type !== 'tii.issued') {
+        const same = existing.event_type === 'tii.issued' && canonicalize(existing.content || {}) === canonicalize(intendedContent);
+        if (!same) {
           throw new Error(`idempotency_key "${idempotency_key}" was already used for a different operation`);
         }
         return { tii: existing.tii, event: existing, idempotent_replay: true };
@@ -189,7 +202,7 @@ class Ledger {
       tii,
       event_type: 'tii.issued',
       recorder,
-      content: { ...content, identifier_status },
+      content: intendedContent,
       basis,
       external_refs,
       content_verification,

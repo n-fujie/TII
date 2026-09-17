@@ -179,6 +179,62 @@ test('NON-IDEMPOTENT BY DESIGN (documented limitation, unchanged) — issueTII()
   assert.equal(l.events.filter((e) => e.event_type === 'tii.issued').length, 2);
 });
 
+/* ------------------------------------------------------------------------ *
+ * REHEARSAL FINDING (spec/rehearsal-audit-2026-09-17.md): issueTII()'s own
+ * idempotency pre-check compared only event_type, never content -- so a
+ * caller reusing a key with genuinely DIFFERENT content silently received
+ * the ORIGINAL request's result with no error, instead of the fail-closed
+ * conflict every other idempotency check in this codebase (Ledger's own
+ * _validateAppend(), and the already-fixed issueProductionTII()) correctly
+ * implements. Found by running the real CLI end-to-end, not by inspection.
+ * Fixed in src/ledger.js issueTII() to also compare content, mirroring
+ * _validateAppend()'s existing comparison exactly.
+ * ------------------------------------------------------------------------ */
+
+test('IDEMPOTENCY CONTRACT (rehearsal finding, fixed) — issueTII() same key + SAME content replays the original result', () => {
+  const file = path.join(tmpDir('tii-idem-same-'), 'ledger.jsonl');
+  const l = new Ledger(file).load();
+  const opts = { recorder: R('t'), content: { note: 'A' }, idempotency_key: 'K' };
+  const first = l.issueTII(opts);
+  const second = l.issueTII(opts);
+  assert.equal(second.tii, first.tii);
+  assert.deepEqual(second.event, first.event);
+  assert.equal(second.idempotent_replay, true);
+  assert.equal(l.events.filter((e) => e.event_type === 'tii.issued').length, 1);
+});
+
+test('IDEMPOTENCY CONTRACT (rehearsal finding, fixed) — issueTII() same key + DIFFERENT content fails closed, never silently returns the wrong result', () => {
+  const file = path.join(tmpDir('tii-idem-diff-'), 'ledger.jsonl');
+  const l = new Ledger(file).load();
+  const first = l.issueTII({ recorder: R('t'), content: { note: 'A' }, idempotency_key: 'K' });
+  assert.throws(
+    () => l.issueTII({ recorder: R('t'), content: { note: 'DIFFERENT' }, idempotency_key: 'K' }),
+    /idempotency_key "K" was already used for a different operation/
+  );
+  assert.equal(l.events.filter((e) => e.event_type === 'tii.issued').length, 1, 'the rejected conflicting call must append nothing');
+  assert.equal(l.tiiExists(first.tii), true, 'the original issuance is untouched');
+});
+
+test('IDEMPOTENCY CONTRACT (rehearsal finding, fixed) — issueTII() and Ledger.append()\'s own _validateAppend() now agree exactly on same-key/same-content vs. same-key/different-content', () => {
+  // Regression guard against the two idempotency checks drifting apart again:
+  // issueTII() has its own pre-check (to avoid wasting a newTII() draw on a
+  // confirmed replay) that must implement the IDENTICAL comparison
+  // _validateAppend() performs for the general append() path.
+  const file = path.join(tmpDir('tii-idem-parity-'), 'ledger.jsonl');
+  const l = new Ledger(file).load();
+  const { tii, event } = l.issueTII({ recorder: R('t'), content: { note: 'A' }, idempotency_key: 'PARITY-K' });
+
+  // Same key, same content, via the general append() path directly (not
+  // issueTII()) -- must ALSO replay, proving both paths share one contract.
+  const replay = l.append({ tii, event_type: 'tii.issued', recorder: R('t'), content: { note: 'A', identifier_status: 'test' }, idempotency_key: 'PARITY-K' });
+  assert.deepEqual(replay, event);
+
+  assert.throws(
+    () => l.append({ tii, event_type: 'tii.issued', recorder: R('t'), content: { note: 'DIFFERENT', identifier_status: 'test' }, idempotency_key: 'PARITY-K' }),
+    /idempotency_key "PARITY-K" was already used for a different operation/
+  );
+});
+
 /* ============================================================ *
  * 4. REBUILD ATOMICITY — registry/catalog generation, resolver visibility
  * ============================================================ */
