@@ -157,3 +157,68 @@ executable state under review.
 
 **Stopping here, before any change to the production gate**, per this
 task's explicit instruction.
+
+## Human authorization decision (2026-09-17)
+
+The following explicit human authorization was given and is recorded
+here verbatim, append-only:
+
+> "I authorize production issuance of TII identifiers against the
+> reviewed executable state at commit c809909, subject to the
+> production gate conditions, the residual risks recorded in
+> spec/production-issuance-authorization-record.md, and the invariant
+> that the canonical ledger remains the sole record of authority."
+
+**What this decision does:** it is the human authorization step this
+record existed to receive — the "explicit, separate human decision
+naming production issuance specifically" referenced above, applied to
+the executable state at `c809909` (see "Executable state under review
+vs. this record's own commit" above; documentation-only commits added
+after `c809909`, including this one, do not change that executable
+state per the rule stated there).
+
+**What this decision does NOT do**, per its own explicit wording and per
+this task's instruction:
+
+- It does not itself set `TII_PRODUCTION_ISSUANCE_ENABLED` or any other
+  production-gate runtime flag — the authorization is explicitly
+  "subject to the production gate conditions," which remain unmet in the
+  committed configuration (`production_requested`, `governance_approved`,
+  `resolver_approved`, `iana_gate_satisfied`, `signing_ready`,
+  `checkpoint_current`).
+- It does not issue any identifier, production or otherwise.
+- It does not modify executable code, runtime configuration, ledger
+  contents, identifier semantics, issuance logic, or gate conditions —
+  confirmed by the verification immediately below.
+- It does not waive or resolve the residual risks listed above — the
+  authorization is explicitly "subject to" them, not a decision that
+  they no longer apply.
+- It does not change the governing invariant — the canonical ledger
+  remains the sole record of authority, and the decision explicitly
+  says so itself.
+
+**Next step, not taken here:** per
+`spec/post-iana-enablement-runbook.md` steps 6–8, actually enabling
+issuance requires a further, separate operational action — setting the
+runtime governance/resolver/signing/production flags in the deployment
+environment and verifying the gate opens against that real
+configuration — which this decision authorizes but does not itself
+perform.
+
+### Verified after recording this decision
+
+- Full test suite: **242/242 passing**.
+- Canonical ledger: **byte-identical** — `data/ledger.jsonl`, 10 events,
+  SHA-256 `6882290be03e67ffd6abddafbfcccdf5a0a44b1cf4770d6f4763ce786c0d85fd`,
+  head hash `eb27a2b7a557465b1301e7225052d03b6fc1550caa7b9ea943e5e90835427e95`,
+  `verify().ok === true` — unchanged from every prior check in this
+  record.
+- Production issuance: **confirmed still unavailable** —
+  `computeGateStatus(...).available === false`, blocked by the same six
+  conditions (`production_requested`, `governance_approved`,
+  `resolver_approved`, `iana_gate_satisfied`, `signing_ready`,
+  `checkpoint_current`), none of which this decision set.
+
+This entry records the human decision only. No executable code, runtime
+configuration, ledger content, identifier semantics, issuance logic, or
+gate condition was modified in recording it.
