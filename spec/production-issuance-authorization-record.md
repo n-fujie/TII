@@ -293,3 +293,77 @@ exactly as long as that secret is actually present and no longer.
 Actually issuing the first production identifier remains a separate,
 not-yet-taken step (`spec/first-production-issuance-procedure.md`), and
 this rehearsal did not perform it.
+
+## First production issuance — completion record (2026-09-17)
+
+The step described as "not-yet-taken" immediately above has now been
+taken, using exactly the mechanism just rehearsed. Full detail:
+`spec/first-production-issuance-runbook-reviewed.md` (the reviewed
+runbook and proposed object, approved before execution).
+
+```
+tii:                 tii:fabdi3ifjwteyi3os2hwmx2l5i
+event_id:            evt_bfrbdmdd6sprept3
+seq:                 10
+recorder:            Naoto Fujie
+idempotency_key:     tii-first-production-issuance-2026-09-17
+prev_hash:           eb27a2b7a557465b1301e7225052d03b6fc1550caa7b9ea943e5e90835427e95 (former head)
+hash / new head:     398b085ecf6784b5a8bad5c97bd70fb200cd3966ebaabfe82ba10ee50538e4bc
+Executed:            git commit 419de8f
+```
+
+Independently verified across the issuance and the subsequent
+idempotent-replay retry (both requiring the real production passphrase,
+supplied only by the human operator in their own terminal — never seen
+by this agent):
+
+- Ledger: exactly 11 events, exactly one new `tii.issued` event, exactly
+  the identifier above, `prev_hash` equal to the former head,
+  `verify().ok === true`. Byte-identical before and after the idempotent
+  replay (SHA-256
+  `34e415cbf63a721ee6aa5ea34907cbf095f67e526ddc401923d09037737fd664`,
+  same head hash, both re-checked directly against the file).
+- Both checkpoints created for the new head, plus the pre-existing one
+  for the former head: all three independently **VERIFIED** against the
+  public key alone, `key_id: 1486de6152baec7f` — never re-derived from
+  or dependent on the passphrase.
+- Registry/catalog, per-identifier projections, CLI (`show`/`events`,
+  including fragment-bearing references), the dynamic resolver, the
+  actual static build's own shipped client script, and the **live
+  deployed resolver** (`https://transition-ignition-id.org`, after a
+  real deploy) all independently confirmed to serve the new identifier
+  correctly and consistently.
+- **Idempotent replay**: re-running the identical issuance command (same
+  idempotency key, same content) through the real production path added
+  no new event, created no new checkpoint, and returned the same
+  identifier — inferred with certainty from the ledger's own
+  unchanged state (event count, SHA-256, head hash, and `tii.issued`
+  count all identical before and after), which is the necessary and
+  sufficient on-disk consequence of a correct idempotent replay; this
+  agent did not independently observe the command's own
+  `idempotent_replay: true` field, since running that command requires
+  the passphrase.
+- Fresh process, no `TII_*` variables: `production-status` reports
+  `available: false` again, the same six conditions blocking as before
+  any of this began.
+- Full test suite: **242/242 passing**, including the corrected
+  historical invariant in `test/ledger-integrity.test.js`
+  (`spec/production-issuance-authorization-record.md`'s sibling
+  clarification commit, `38fcdd4`) that now explicitly recognizes this
+  exact event as the authorized first production issuance rather than
+  treating it as a violation.
+- The version-semantics question raised during initial verification
+  (checkpoint `spec_version` vs. the note's "TII 1.0") was investigated
+  and resolved as a documentation gap, not a real inconsistency — two
+  independently-versioned specifications, now explicitly cross-referenced
+  in both directions (`SPEC.md`, `spec/identifier-syntax-1.0-candidate.md`,
+  `spec/checkpoint-operation.md`, commit `38fcdd4`). No code, ledger, or
+  checkpoint field was renamed or reinterpreted to resolve it.
+
+**First production TII issuance: COMPLETE.** `tii:fabdi3ifjwteyi3os2hwmx2l5i`
+is the one production identifier in the canonical ledger. No second
+production issuance has occurred or was performed as part of any of this
+verification. Production issuance capability remains gated exactly as
+designed — closed by default, opening only when the real passphrase is
+supplied in an ephemeral, human-controlled environment, and closing
+again the instant that environment ends.
