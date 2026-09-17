@@ -176,10 +176,26 @@ function maybeAutoCheckpoint() {
   }
 }
 
-/** Resolve an exact TII, or a filesystem slug (tii_xxx), or a bare body. */
+/**
+ * Resolve an exact TII, or a filesystem slug (tii_xxx), or a bare body.
+ *
+ * RFC 3986 §3.5 / the IANA `tii` registration
+ * (https://www.iana.org/assignments/uri-schemes/prov/tii): "URI fragments
+ * follow generic RFC 3986 URI-reference semantics and are not part of the
+ * TII token." A trailing `#fragment` is stripped BEFORE lookup — it must
+ * never cause an otherwise-valid reference to fail to resolve, and it is
+ * never itself compared against anything. This applies uniformly to
+ * whichever identifier profile is in use (the 12-character test format or
+ * the 26-character production format, src/id.js / src/identifier.js) —
+ * resolution here is profile-agnostic string lookup, so one fragment-split
+ * step correctly covers both.
+ */
 function resolveIdentifier(input) {
   if (!input) return null;
   let v = decodeURIComponent(input).replace(/\.(html|json)$/, '').trim().toLowerCase();
+  const hash = v.indexOf('#');
+  if (hash !== -1) v = v.slice(0, hash); // fragment removed before lookup — never part of the TII, never affects the result
+  if (!v) return null;
   if (ledger.tiiExists(v)) return v;
   if (!v.startsWith('tii:')) {
     const withNs = 'tii:' + v.replace(/^tii[:_]?/, '');
@@ -220,6 +236,20 @@ const server = http.createServer(async (req, res) => {
 
     if (method === 'GET' && parts[0] === 'registry' && parts.length === 1) {
       return sendHTML(res, 200, views.registryPage({ lang, summaries: summariesForRegistry() }));
+    }
+
+    // Machine-readable registry listing — parity with exporters.buildStaticSite()'s
+    // catalog.json (src/export.js), which the deployed static mirror already
+    // serves. The live dynamic server had no equivalent; same shape, same
+    // publicSummary() fields, so a consumer gets identical data from either
+    // deployment mode.
+    if (method === 'GET' && parts[0] === 'catalog.json') {
+      return sendJSON(res, 200, {
+        generated_at: new Date().toISOString(),
+        verification: ledger.verify(),
+        resolver_base: RESOLVER_BASE,
+        identifiers: summariesForRegistry(),
+      });
     }
 
     if (method === 'GET' && (parts[0] === 'spec' || parts[0] === 'about') && parts.length === 1) {

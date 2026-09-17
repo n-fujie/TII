@@ -272,7 +272,12 @@ that closure note for the repair and its proof.)
 > **Status at original writing: no domain purchased.** Since resolved to
 > PASS — see the G7 closure note appended at the end of this document and
 > `spec/resolver-domain-decision.md` §15–§18 for the registrar change,
-> the purchase, and full independent verification.
+> the purchase, and full independent verification. A separate resolver
+> *behavior* conformance gap (RFC 3986 fragment handling in the live
+> `resolveIdentifier()`, unrelated to the domain/DNS/HTTPS facts this
+> section covers) was found and fixed 2026-09-17 — see
+> `spec/iana-conformance-audit-2026-09-17.md`. G7 remained PASS
+> throughout; this did not reopen it.
 
 **No domain purchased. No DNS changed.** Live RDAP re-check performed
 2026-09-11 (this phase), method validated against a known-registered
