@@ -106,6 +106,17 @@ carries no scheme-specific semantics, per the registration text); an
 unknown token with a fragment still correctly 404s (fragment-stripping
 never produces a false positive); a bare `#` does not crash either path.
 
+### Live verification (deployed production site, post-fix)
+
+Read the actual shipped `<script>` from `https://transition-ignition-id.org/`
+directly (not assumed from the source repo) — confirmed the fragment-strip
+line is present in what is genuinely served. Then exercised the real form
+in a live browser: typed `tii:h4r3jsn4p25d#note` into the homepage search
+box, dispatched the real submit event, and confirmed the page navigated
+to `https://transition-ignition-id.org/tii/tii_h4r3jsn4p25d` — the
+correct, existing identifier's page, not a 404. End-to-end, live,
+independent of the unit tests above.
+
 ## 5. Test coverage gap closed
 
 `src/id.js` (the profile every real identifier actually uses) previously
