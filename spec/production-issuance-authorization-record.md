@@ -222,3 +222,74 @@ perform.
 This entry records the human decision only. No executable code, runtime
 configuration, ledger content, identifier semantics, issuance logic, or
 gate condition was modified in recording it.
+
+## Production-gate activation rehearsal (2026-09-17)
+
+Following the authorization above, the production gate was rehearsed
+open using the existing mechanism only — no code, config, ledger
+content, identifier semantics, or gate logic was changed to do this.
+
+**What happened, in the human operator's own terminal:** the four
+policy flags (`TII_PRODUCTION_ISSUANCE_ENABLED`, `TII_GOVERNANCE_APPROVED`,
+`TII_RESOLVER_APPROVED`, `TII_IANA_GATE_SATISFIED`) were exported, the
+real production key was pointed to via `TII_CHECKPOINT_PRIVATE_KEY_FILE`,
+and the passphrase was supplied via `TII_CHECKPOINT_KEY_PASSPHRASE_FILE`
+pointing at a temporary file the operator created and deleted themselves
+— never seen, typed, or held by this agent at any point. `tii checkpoint
+create` produced a real signed checkpoint against the real ledger head;
+`tii production-status`, run in that same shell, reported
+**`available: true`**, all nine conditions true, `blocked_by: []`. Shell
+cleanup left no `TII_*` variables behind.
+
+**Independently verified by this agent, without ever touching the
+passphrase** (the checkpoint's signature needs only its embedded public
+key to verify, never the private key or passphrase):
+
+- `checkpoints/checkpoint-0000000010-...json` exists.
+- `tii checkpoint verify` → `status: VERIFIED`, `key_id: 1486de6152baec7f`
+  (the known production key), `matches_current_head: true`,
+  `ledger_head_hash: eb27a2b7a557465b1301e7225052d03b6fc1550caa7b9ea943e5e90835427e95`
+  — exactly the real ledger's current head.
+- Canonical ledger: **byte-identical** — `data/ledger.jsonl`, 10 events,
+  SHA-256 `6882290be03e67ffd6abddafbfcccdf5a0a44b1cf4770d6f4763ce786c0d85fd`,
+  `verify().ok === true` — unchanged from every prior check in this
+  record.
+- **No `tii.issued` event was added** — exactly one remains
+  (`tii:h4r3jsn4p25d`, the pre-existing historical test identifier); no
+  identifier, test or production, was issued as a side effect of any of
+  this.
+- This agent's own shell: no `TII_*` variable present at any point
+  (it never held the passphrase to begin with).
+- **Re-ran `tii production-status` in a genuinely fresh process with no
+  environment variables set at all**: `available: false`, the same six
+  conditions blocking again, exit code 1 — including `checkpoint_current`,
+  which reports false here even though the checkpoint above is real and
+  valid, because that condition (as coded) only evaluates once
+  `signing_ready` is also true *in the same evaluation*; it is not a
+  stored or cached fact.
+
+### The distinction this rehearsal establishes
+
+1. **Verified**: the production gate genuinely opens — all nine
+   conditions, including the two that require the real signing key and
+   passphrase — when every authorized runtime condition is actually
+   supplied together, in one process. This was not a simulation or a
+   mocked key; it was the real production key (`1486de6152baec7f`) and a
+   real signed checkpoint against the real ledger head.
+2. **Not done**: persistent production-issuance enablement. Nothing was
+   changed in the committed repository, in any deployment's environment
+   variables, or anywhere else that would make the gate open again on
+   the next process invocation. The enabling environment was exported in
+   one interactive shell for the duration of two commands and ceased to
+   exist the moment that shell's variables were gone — confirmed above
+   by re-checking in a fresh process. The permanent regression test
+   already in this codebase ("the committed repository configuration
+   ... never satisfies the gate") remains true and was not touched.
+
+**Production issuance remains DISABLED in every persistent sense.** This
+rehearsal proves the mechanism works exactly as designed — fail-closed
+without the real secret, genuinely open only with it, and open for
+exactly as long as that secret is actually present and no longer.
+Actually issuing the first production identifier remains a separate,
+not-yet-taken step (`spec/first-production-issuance-procedure.md`), and
+this rehearsal did not perform it.
