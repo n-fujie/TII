@@ -779,3 +779,36 @@ G14 First-issuance procedure PASS
 status: still NOT READY. Production issuance remains DISABLED.** No
 production TII issued, no keys rotated, no new IANA submission, G3/G7/G8/G13
 not reopened, the real canonical ledger not modified.
+
+## G9 final closure — IANA registered (2026-09-17)
+
+Independently confirmed live: `tii` is registered in the official IANA
+URI Schemes registry — Status Provisional, CRI Scheme Number 1027,
+registered 2026-09-15, Contact/Change Controller Naoto Fujie, matching
+what was submitted. Full detail: `spec/production-launch-gate.md`'s "G9
+final closure" note.
+
+```
+G1  Identifier syntax         PASS
+G2  Production isolation      PASS
+G3  Production key custody    PASS
+G4  Signed checkpoints        PASS
+G5  Writer safety             PASS
+G6  Recovery/idempotency      PASS
+G7  Permanent resolver        PASS
+G8  Governance                PASS
+G9  IANA                      PASS
+G10 Public-only policy        PASS
+G11 Security                  PASS
+G12 Reconstruction/succession PASS
+G13 Release artifacts         PASS
+G14 First-issuance procedure  PASS
+```
+
+**All 14 gates: PASS. Gate-table status: READY.** This is a statement
+that preparation is complete — **it is not an authorization to enable
+production issuance.** `TII_PRODUCTION_ISSUANCE_ENABLED` remains unset;
+no runtime governance/resolver/signing flags have been set; no human has
+been asked for, or given, authorization to issue. Per
+`spec/post-iana-enablement-runbook.md`, that authorization is a separate,
+explicit, future decision — not implied by gate-table completeness.

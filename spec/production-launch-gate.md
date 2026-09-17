@@ -568,7 +568,7 @@ non-promotion tests.
 | G6 — Recovery/idempotency | **PASS** *(briefly downgraded and re-closed same day, 2026-09-15 — see "G6/G14 idempotency repair" appended at the end of this document)* |
 | G7 — Resolver | **PASS** *(resolved 2026-09-12 — see the closure note appended at the end of this document)* |
 | G8 — Governance | **PASS** *(resolved 2026-09-11 — see the closure note appended at the end of this document)* |
-| G9 — IANA | **PENDING IANA** *(submitted 2026-09-13 — see the closure note appended at the end of this document)* |
+| G9 — IANA | **PASS** *(registered 2026-09-15, independently confirmed 2026-09-17 — see the closure note appended at the end of this document)* |
 | G10 — Public-only policy | **PASS** |
 | G11 — Security | **PASS** |
 | G12 — Reconstruction/succession | **PASS** |
@@ -1086,3 +1086,51 @@ no key rotation, no new IANA submission. G3, G7, G8, G9, G13 untouched.
 
 **Remaining non-PASS launch gate: G9 (PENDING IANA) only. Overall launch
 status remains NOT READY. Production issuance remains DISABLED.**
+
+## G9 final closure (appended 2026-09-17) — G9: PENDING IANA → PASS
+
+Independently re-checked the official IANA URI Schemes registry, two
+ways — the read-only script (`scripts/g9-iana-registry-check.js`) and a
+direct browser read of both the registry table and the scheme's own
+template page — and confirmed `tii` is registered:
+
+```
+Scheme name:        tii
+Status:             Provisional
+CRI Scheme Number:  1027
+Reference:          [Naoto_Fujie]
+Registered:         2026-09-15
+Template page:      https://www.iana.org/assignments/uri-schemes/prov/tii
+```
+
+The template page's own text matches what was submitted, verbatim in
+substance: Contact and Change Controller Naoto Fujie
+(`platodesign@icloud.com`), Specification
+`https://transition-ignition-id.org/spec`, and — now IANA's own
+authoritative wording, not merely this project's — *"The canonical form
+is tii:<token>. The token is opaque. HTTPS resolution infrastructure is
+separate from identifier identity. URI fragments follow generic RFC 3986
+URI-reference semantics and are not part of the TII token."*
+
+Minimal post-IANA invariant checks (`spec/post-iana-enablement-runbook.md`
+step 3): canonical ledger unchanged (10 events, SHA-256
+`6882290be03e67ffd6abddafbfcccdf5a0a44b1cf4770d6f4763ce786c0d85fd`); full
+test suite 192/192 passing; live resolver routes (`/`, `/spec`,
+`/registry`, `/audit`, `/catalog.json`) all HTTP 200.
+
+**G9 — IANA: PASS.**
+
+**All 14 launch gates now read PASS.** Per this document's own stated
+rule ("production launch requires every gate to read PASS"),
+`overall_launch_status` is updated to **READY** in
+`spec/launch-status.json` — a statement about gate-table completeness
+only. **This is explicitly not an authorization to enable production
+issuance.** Per `spec/post-iana-enablement-runbook.md` steps 4–8:
+presenting this status to the human, obtaining explicit separate
+authorization, setting the runtime governance/resolver/signing flags,
+verifying the gate actually opens against real configuration, and
+issuing the first production TII under yet another separate
+authorization all remain outstanding and were not performed here.
+**Production issuance remains DISABLED** — `TII_PRODUCTION_ISSUANCE_ENABLED`
+is not set anywhere in the committed configuration, and no override was
+made.
