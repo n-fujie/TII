@@ -2,6 +2,7 @@
 
 const labels = require('./labels');
 const { tiiToFileSlug } = require('./id');
+const { splitFragment } = require('./tii-lookup');
 const { t, normalizeLang, humanizeEventType, recordStatusLabel, formatDate } = require('./i18n');
 const { displayContent } = require('./projection');
 const { renderMarkdown } = require('./md');
@@ -222,10 +223,11 @@ function homePage({ lang }) {
 <p class="muted small">${esc(L('home_core_note'))}</p>
 
 <script>
-(function(){var f=document.querySelector('form.resolve');if(!f)return;
+(function(){
+${splitFragment.toString()}
+var f=document.querySelector('form.resolve');if(!f)return;
 f.addEventListener('submit',function(e){e.preventDefault();
-var v=(f.tii.value||'').trim().toLowerCase();if(!v){return;}
-var h=v.indexOf('#');if(h!==-1){v=v.slice(0,h);}if(!v){return;}
+var v=splitFragment(f.tii.value).base;if(!v){return;}
 if(v.indexOf('tii:')!==0){v='tii:'+v.replace(/^tii[:_]?/,'');}
 var slug=v.replace(/[^a-z0-9]+/g,'_');
 window.location.href=${JSON.stringify(base)}+'/tii/'+slug;});})();

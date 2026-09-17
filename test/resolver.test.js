@@ -49,6 +49,7 @@ async function bootServerWithOneTII() {
   const port = mod.server.address().port;
   return {
     tii,
+    ledgerFile,
     port,
     close: () => new Promise((resolve) => mod.server.close(resolve)),
     restoreEnv: () => Object.assign(process.env, prevEnv),
@@ -281,5 +282,77 @@ test('resolver — identical identifier resolves the same way regardless of Host
   } finally {
     await srv.close();
     srv.restoreEnv();
+  }
+});
+
+/* ==================================================================== *
+ * STATIC BUILD vs DYNAMIC SERVER: same TII references, same outcome.
+ *
+ * The deployed production site is the STATIC build (exporters.buildStaticSite);
+ * the dynamic src/server.js is used for local development and any future
+ * non-static deployment. Both must interpret the same input references
+ * identically -- this is the deliverable the shared src/tii-lookup.js
+ * primitive (and its byte-identical embedding into the static build's own
+ * client-side script) exists to guarantee. This test builds BOTH from the
+ * SAME seeded ledger and drives BOTH with the SAME input matrix.
+ * ==================================================================== */
+
+const exporters = require('../src/export');
+const { tiiToFileSlug } = require('../src/id');
+
+/** What the STATIC build resolves `typedValue` to: run its own shipped
+ * client-side script (extracted from the real built index.html — not
+ * views.js directly, so this exercises the actual build artifact) and
+ * report the slug it would navigate to. */
+function staticBuildResolves(outDir, typedValue) {
+  const html = fs.readFileSync(path.join(outDir, 'index.html'), 'utf8');
+  const script = extractResolveScript(html);
+  return simulateResolveSubmit(script, typedValue);
+}
+
+/** What the DYNAMIC server resolves `typedValue` to via /resolve?tii=:
+ * the redirect Location on success, or the literal marker '404' on a
+ * genuine not-found. */
+async function dynamicServerResolves(port, typedValue) {
+  const res = await get(port, '/resolve?tii=' + encodeURIComponent(typedValue));
+  if (res.status === 404) return '404';
+  return res.headers.location;
+}
+
+test('EQUIVALENCE — static production build and dynamic server resolve an identical input matrix to the identical outcome', async () => {
+  const srv = await bootServerWithOneTII();
+  const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tii-equiv-static-'));
+  try {
+    const seededLedger = new Ledger(srv.ledgerFile).load();
+    exporters.buildStaticSite(seededLedger, outDir, { resolverBase: '' });
+
+    const slug = tiiToFileSlug(srv.tii);
+    const matrix = [
+      srv.tii, // bare, canonical
+      srv.tii.toUpperCase(), // case-insensitive scheme/body per RFC 3986 §3.1
+      srv.tii + '#note', // fragment must not break resolution
+      srv.tii + '#', // bare fragment marker
+      '  ' + srv.tii + '  ', // incidental whitespace
+      'tii:doesnotexist0000', // well-formed but unknown
+      'tii:doesnotexist0000#note', // unknown + fragment: must still not false-positive
+    ];
+
+    for (const input of matrix) {
+      const staticHref = staticBuildResolves(outDir, input);
+      const dynamicLocation = await dynamicServerResolves(srv.port, input);
+
+      if (input.includes('doesnotexist')) {
+        assert.notEqual(staticHref, '/tii/' + slug, `static build must not false-positive on ${JSON.stringify(input)}`);
+        assert.notEqual(dynamicLocation, '/tii/' + slug, `dynamic server must not false-positive on ${JSON.stringify(input)}`);
+      } else {
+        assert.equal(staticHref, '/tii/' + slug, `static build should resolve ${JSON.stringify(input)} to the seeded identifier`);
+        assert.equal(dynamicLocation, '/tii/' + slug, `dynamic server should resolve ${JSON.stringify(input)} to the seeded identifier`);
+        assert.equal(staticHref, dynamicLocation, `static and dynamic must agree exactly for ${JSON.stringify(input)}`);
+      }
+    }
+  } finally {
+    await srv.close();
+    srv.restoreEnv();
+    fs.rmSync(outDir, { recursive: true, force: true });
   }
 });

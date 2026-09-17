@@ -9,6 +9,7 @@ const { project } = require('../src/projection');
 const { sha256File } = require('../src/hash');
 const { canonicalize } = require('../src/canonical');
 const { sha256 } = require('../src/hash');
+const { splitFragment } = require('../src/tii-lookup');
 const exporters = require('../src/export');
 const recovery = require('../src/recovery');
 const checkpointStore = require('../src/checkpoint-store');
@@ -114,13 +115,18 @@ try {
       break;
     }
     case 'show': {
+      // splitFragment() (src/tii-lookup.js): the same shared, profile-agnostic
+      // primitive the resolver uses, so an operator pasting a full tii:<token>#fragment
+      // reference here behaves consistently with resolving it on the site.
+      // args[0] is a lookup key, not a canonical form assertion -- forgiving
+      // case/fragment here never changes what gets appended to the ledger.
       const ledger = load();
-      console.log(JSON.stringify(project(ledger.forTII(args[0])), null, 2));
+      console.log(JSON.stringify(project(ledger.forTII(splitFragment(args[0]).base)), null, 2));
       break;
     }
     case 'events': {
       const ledger = load();
-      console.log(JSON.stringify(ledger.forTII(args[0]), null, 2));
+      console.log(JSON.stringify(ledger.forTII(splitFragment(args[0]).base), null, 2));
       break;
     }
     case 'list': {

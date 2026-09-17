@@ -10,6 +10,7 @@ const { Ledger } = require('./ledger');
 const { project } = require('./projection');
 const { sha256File } = require('./hash');
 const { tiiToFileSlug } = require('./id');
+const { splitFragment } = require('./tii-lookup');
 const { normalizeLang } = require('./i18n');
 const views = require('./views');
 const exporters = require('./export');
@@ -182,19 +183,19 @@ function maybeAutoCheckpoint() {
  * RFC 3986 §3.5 / the IANA `tii` registration
  * (https://www.iana.org/assignments/uri-schemes/prov/tii): "URI fragments
  * follow generic RFC 3986 URI-reference semantics and are not part of the
- * TII token." A trailing `#fragment` is stripped BEFORE lookup — it must
- * never cause an otherwise-valid reference to fail to resolve, and it is
- * never itself compared against anything. This applies uniformly to
- * whichever identifier profile is in use (the 12-character test format or
- * the 26-character production format, src/id.js / src/identifier.js) —
+ * TII token." A trailing `#fragment` is stripped BEFORE lookup, via the
+ * single shared src/tii-lookup.js splitFragment() primitive — see that
+ * module's doc comment for why it is a shared module (this fragment-split
+ * step used to be reimplemented separately here and in the static site's
+ * client-side script, and drifted). This applies uniformly to whichever
+ * identifier profile is in use (the 12-character test format or the
+ * 26-character production format, src/id.js / src/identifier.js) —
  * resolution here is profile-agnostic string lookup, so one fragment-split
  * step correctly covers both.
  */
 function resolveIdentifier(input) {
   if (!input) return null;
-  let v = decodeURIComponent(input).replace(/\.(html|json)$/, '').trim().toLowerCase();
-  const hash = v.indexOf('#');
-  if (hash !== -1) v = v.slice(0, hash); // fragment removed before lookup — never part of the TII, never affects the result
+  const v = splitFragment(decodeURIComponent(input)).base.replace(/\.(html|json)$/, '');
   if (!v) return null;
   if (ledger.tiiExists(v)) return v;
   if (!v.startsWith('tii:')) {
