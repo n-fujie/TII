@@ -84,60 +84,96 @@ const DOCS = {
  * Given only ledger.jsonl this reproduces the same identifiers and derived state
  * with no server, database, or cloud service. English at the root, Japanese
  * under /ja.
+ *
+ * ATOMICITY (spec/issuance-path-audit-2026-09-19.md): this used to `rmSync`
+ * the live `outDir` FIRST and then write every file directly into it — an
+ * interruption at any point during the (potentially long, proportional to
+ * registry size) rebuild left `outDir` in a partially-written, inconsistent
+ * state for as long as nobody rebuilt again: missing pages, a stale or
+ * missing catalog.json, resolver pages that disagree with the registry
+ * listing. Now the entire tree is built into a private temp directory next
+ * to `outDir` (same volume, so the final step is a real rename, not a copy)
+ * and only swapped into place with `fs.renameSync` once every file has been
+ * written successfully. A crash or interruption at any point before the
+ * swap leaves `outDir` completely untouched — see "remaining failure mode"
+ * below for the one narrow window that swap itself cannot fully eliminate.
  */
 function buildStaticSite(ledger, outDir, options = {}) {
   const resolverBase = options.resolverBase || process.env.TII_RESOLVER_BASE_URL || '';
   const generatedAt = new Date().toISOString();
   const verification = ledger.verify();
 
-  fs.rmSync(outDir, { recursive: true, force: true });
-  fs.mkdirSync(path.join(outDir, 'tii'), { recursive: true });
-  fs.mkdirSync(path.join(outDir, 'ja', 'tii'), { recursive: true });
+  const buildDir = `${outDir}.building-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  fs.rmSync(buildDir, { recursive: true, force: true });
+  fs.mkdirSync(path.join(buildDir, 'tii'), { recursive: true });
+  fs.mkdirSync(path.join(buildDir, 'ja', 'tii'), { recursive: true });
 
-  // Machine formats + canonical ledger copy.
-  fs.writeFileSync(path.join(outDir, 'ledger.jsonl'), toJSONL(ledger));
-  fs.writeFileSync(path.join(outDir, 'ledger.json'), toJSON(ledger));
-  fs.writeFileSync(path.join(outDir, 'ledger.csv'), toCSV(ledger));
+  let summaries;
+  try {
+    // Machine formats + canonical ledger copy.
+    fs.writeFileSync(path.join(buildDir, 'ledger.jsonl'), toJSONL(ledger));
+    fs.writeFileSync(path.join(buildDir, 'ledger.json'), toJSON(ledger));
+    fs.writeFileSync(path.join(buildDir, 'ledger.csv'), toCSV(ledger));
 
-  const summaries = [];
-  for (const tii of ledger.listTIIs()) {
-    const p = project(ledger.forTII(tii));
-    const slug = tiiToFileSlug(tii);
-    fs.writeFileSync(path.join(outDir, 'tii', slug + '.json'), JSON.stringify(p, null, 2));
-    fs.writeFileSync(
-      path.join(outDir, 'tii', slug + '.html'),
-      views.resolutionPage({ lang: 'en', p, resolverBase })
-    );
-    fs.writeFileSync(
-      path.join(outDir, 'ja', 'tii', slug + '.html'),
-      views.resolutionPage({ lang: 'ja', p, resolverBase })
-    );
-    summaries.push(publicSummary(p));
-  }
-
-  for (const lang of ['en', 'ja']) {
-    const dir = lang === 'ja' ? path.join(outDir, 'ja') : outDir;
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'index.html'), views.homePage({ lang }));
-    fs.writeFileSync(path.join(dir, 'registry.html'), views.registryPage({ lang, summaries }));
-    fs.writeFileSync(
-      path.join(dir, 'audit.html'),
-      views.auditPage({ lang, verification, generatedAt, exportBase: '/ledger' })
-    );
-    for (const [, d] of Object.entries(DOCS)) {
+    summaries = [];
+    for (const tii of ledger.listTIIs()) {
+      const p = project(ledger.forTII(tii));
+      const slug = tiiToFileSlug(tii);
+      fs.writeFileSync(path.join(buildDir, 'tii', slug + '.json'), JSON.stringify(p, null, 2));
       fs.writeFileSync(
-        path.join(dir, path.basename(d.path) + '.html'),
-        views.docPage({ lang, title: d.title[lang], path: d.path, markdown: readDoc(d[lang]) })
+        path.join(buildDir, 'tii', slug + '.html'),
+        views.resolutionPage({ lang: 'en', p, resolverBase })
       );
+      fs.writeFileSync(
+        path.join(buildDir, 'ja', 'tii', slug + '.html'),
+        views.resolutionPage({ lang: 'ja', p, resolverBase })
+      );
+      summaries.push(publicSummary(p));
     }
-    fs.writeFileSync(path.join(dir, '404.html'), views.notFoundPage({ lang }));
-  }
-  fs.writeFileSync(path.join(outDir, '404.html'), views.notFoundPage({ lang: 'en' }));
 
-  fs.writeFileSync(
-    path.join(outDir, 'catalog.json'),
-    JSON.stringify({ generated_at: generatedAt, verification, resolver_base: resolverBase, identifiers: summaries }, null, 2)
-  );
+    for (const lang of ['en', 'ja']) {
+      const dir = lang === 'ja' ? path.join(buildDir, 'ja') : buildDir;
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'index.html'), views.homePage({ lang }));
+      fs.writeFileSync(path.join(dir, 'registry.html'), views.registryPage({ lang, summaries }));
+      fs.writeFileSync(
+        path.join(dir, 'audit.html'),
+        views.auditPage({ lang, verification, generatedAt, exportBase: '/ledger' })
+      );
+      for (const [, d] of Object.entries(DOCS)) {
+        fs.writeFileSync(
+          path.join(dir, path.basename(d.path) + '.html'),
+          views.docPage({ lang, title: d.title[lang], path: d.path, markdown: readDoc(d[lang]) })
+        );
+      }
+      fs.writeFileSync(path.join(dir, '404.html'), views.notFoundPage({ lang }));
+    }
+    fs.writeFileSync(path.join(buildDir, '404.html'), views.notFoundPage({ lang: 'en' }));
+
+    fs.writeFileSync(
+      path.join(buildDir, 'catalog.json'),
+      JSON.stringify({ generated_at: generatedAt, verification, resolver_base: resolverBase, identifiers: summaries }, null, 2)
+    );
+
+    // Atomic swap. If `outDir` doesn't exist yet this is a single rename —
+    // fully atomic, zero window. If it does, POSIX rename cannot swap two
+    // existing directories in one syscall, so replacing a previous build
+    // takes two renames with a narrow window between them where `outDir`
+    // transiently does not exist. This is a deliberate, documented
+    // trade-off, not an oversight — see this function's doc comment and
+    // spec/issuance-path-audit-2026-09-19.md's "remaining failure modes":
+    // it shrinks the inconsistent-state window from "however long the full
+    // rebuild takes" to "a single directory-rename syscall", and — unlike
+    // before — NEVER exposes a partially-written tree, only either the
+    // complete old build or (very briefly, if replacing) nothing.
+    const staleDir = fs.existsSync(outDir) ? `${outDir}.stale-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : null;
+    if (staleDir) fs.renameSync(outDir, staleDir);
+    fs.renameSync(buildDir, outDir);
+    if (staleDir) fs.rmSync(staleDir, { recursive: true, force: true });
+  } catch (e) {
+    fs.rmSync(buildDir, { recursive: true, force: true }); // never leave a half-built temp directory behind on failure
+    throw e;
+  }
 
   return { outDir, tii_count: summaries.length, verification };
 }
