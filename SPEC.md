@@ -5,9 +5,23 @@
 
 Specification version: `0.1.0` · Status: **Experimental Specification**
 
+> **Two independently-versioned specifications exist in this project —
+> not one document with conflicting version numbers.** This document
+> (`SPEC.md`) versions the **overall TII system specification**: the core
+> event model, optional modules, portability, and pre-production audit
+> criteria. It is currently `0.1.0`, Experimental. The **identifier
+> syntax and resolution profile** is a separate, narrower specification —
+> [`spec/identifier-syntax-1.0-candidate.md`](spec/identifier-syntax-1.0-candidate.md)
+> — versioned independently and already frozen at `1.0`
+> (`spec/production-launch-gate.md` §G1). A checkpoint's `spec_version`
+> field (`spec/checkpoint-operation.md`) records **this** document's
+> version, `0.1.0` — not the identifier syntax profile's `1.0`. Neither
+> number describes the other; they are not in tension.
+
 This document is normative for the reference implementation in this repository.
-While the specification is experimental, every identifier issued by this
-implementation is a **test identifier** (see §9).
+While the overall specification is experimental, the identifier syntax
+profile it depends on (`tii:<token>`, §8) is separately frozen; see §9 for
+what "test" vs. "production" identifier status means and does not mean.
 
 ---
 

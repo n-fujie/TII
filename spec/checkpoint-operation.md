@@ -43,15 +43,31 @@ them into one boolean or one "verified" badge.
 
 ## What a checkpoint binds
 
-A checkpoint attests exactly five facts, and nothing else (`src/jcs.js` +
+A checkpoint attests exactly six facts, and nothing else (`src/jcs.js` +
 `src/checkpoint.js`):
 
 - `ledger_head_hash` — the SHA-256 of the last event in the chain at
   creation time.
 - `event_count` (equivalently, the last `seq`).
 - `created_at` — an ISO-8601 timestamp set by the signer at creation time.
-- `format`/`version` — the checkpoint's own schema version, so future
-  changes to the checkpoint format are distinguishable from a corrupted one.
+- `tii_checkpoint` / `tii_signed_checkpoint` (`CHECKPOINT_FORMAT` in
+  `src/checkpoint.js`, currently `"1"`) — the **checkpoint's own schema
+  format version**, so a future change to the checkpoint's structure is
+  distinguishable from a corrupted one. This is not a specification
+  version and is never compared against `SPEC.md` or any identifier
+  profile's version number.
+- `spec_version` (default `"0.1.0"`, set in `src/checkpoint-store.js`) —
+  **the overall TII system specification's version, i.e. `SPEC.md`'s own
+  "Specification version" field, at the moment the checkpoint was
+  created.** It is unrelated to, and not comparable with, the separately
+  versioned identifier syntax profile
+  (`spec/identifier-syntax-1.0-candidate.md`, currently `1.0`, frozen) —
+  see `SPEC.md`'s own header note for the full explanation of why these
+  are two independent version numbers, not one document with conflicting
+  versions. A checkpoint's `spec_version` reading `"0.1.0"` while an
+  issued identifier's own recorded content says "issued under TII 1.0"
+  is expected and correct, not an inconsistency: the two labels describe
+  different documents.
 - `signing_key_id` — a fingerprint of the Ed25519 public key used, allowing
   verification against the correct key after rotation.
 

@@ -66,6 +66,16 @@ function keyId(publicKeyPem) {
  * Bind the minimum that a checkpoint must attest to. `extra` may carry
  * interpretation / spec-version notes but nothing that would make the format
  * unstable.
+ *
+ * `specVersion` documents the OVERALL TII system specification's version
+ * (SPEC.md's own "Specification version" field) at creation time — it is
+ * NOT the checkpoint's own schema format (that's `tii_checkpoint` below,
+ * `CHECKPOINT_FORMAT`) and NOT the separately-versioned identifier syntax
+ * profile (`spec/identifier-syntax-1.0-candidate.md`, currently `1.0`,
+ * frozen independently of SPEC.md's version). See
+ * `spec/checkpoint-operation.md` "What a checkpoint binds" and SPEC.md's
+ * own header note for the full cross-reference — these are two
+ * independently-versioned documents, not one with conflicting numbers.
  */
 function buildCheckpoint({ ledgerHeadHash, eventCount, specVersion, createdAt, extra }) {
   if (!ledgerHeadHash || typeof eventCount !== 'number') {

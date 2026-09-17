@@ -268,9 +268,42 @@ test('the committed data/ledger.jsonl is clean and append-only valid', () => {
   // the hosting-provider hostname is not written into canonical identity
   assert.ok(!/tiiarchive\.vercel\.app/.test(raw), 'Vercel hostname is not canonical');
 
-  // every issued identifier is still a test identifier
-  for (const e of events) {
-    if (e.event_type === 'tii.issued') assert.equal(e.content.identifier_status, 'test');
+  // Historical invariant, corrected 2026-09-17 after the first authorized
+  // production issuance (spec/production-issuance-authorization-record.md,
+  // spec/first-production-issuance-runbook-reviewed.md). The original
+  // assertion here ("every issued identifier is still a test identifier")
+  // was a pre-authorization guard against production issuance happening
+  // before proper authorization — it is not weakened by this update, it is
+  // corrected to match the now-authorized reality it was written to guard
+  // against. This does NOT categorically forbid future production
+  // issuances; it fixes exactly one already-reviewed historical fact and
+  // protects everything strictly before it.
+  const FIRST_PRODUCTION_ISSUANCE = {
+    event_id: 'evt_bfrbdmdd6sprept3',
+    tii: 'tii:fabdi3ifjwteyi3os2hwmx2l5i',
+    seq: 10,
+    hash: '398b085ecf6784b5a8bad5c97bd70fb200cd3966ebaabfe82ba10ee50538e4bc',
+  };
+  const issuedEvents = events.filter((e) => e.event_type === 'tii.issued');
+  const firstProduction = issuedEvents.find((e) => e.content.identifier_status === 'production');
+
+  assert.ok(firstProduction, 'the already-reviewed first production issuance must still exist in the committed ledger');
+  assert.equal(firstProduction.event_id, FIRST_PRODUCTION_ISSUANCE.event_id, 'the first production issuance must still be the exact, already-reviewed event, not a different one');
+  assert.equal(firstProduction.tii, FIRST_PRODUCTION_ISSUANCE.tii);
+  assert.equal(firstProduction.seq, FIRST_PRODUCTION_ISSUANCE.seq);
+  assert.equal(firstProduction.hash, FIRST_PRODUCTION_ISSUANCE.hash);
+
+  // Every tii.issued event strictly BEFORE the first authorized production
+  // issuance must remain identifier_status "test" — this is the actual
+  // safety invariant: no pre-authorization issuance may be silently
+  // reclassified. Events after it (a hypothetical future production
+  // issuance) are deliberately NOT constrained here — this test fixes one
+  // historical fact, it does not impose a "at most one production
+  // identifier, ever" rule.
+  for (const e of issuedEvents) {
+    if (e.seq < FIRST_PRODUCTION_ISSUANCE.seq) {
+      assert.equal(e.content.identifier_status, 'test', `event ${e.event_id} (seq ${e.seq}) predates the first authorized production issuance and must remain identifier_status: "test"`);
+    }
   }
 
   // chain verifies

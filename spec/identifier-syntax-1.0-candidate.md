@@ -2,6 +2,17 @@
 
 Transition-Ignition Identifier (TII) · 遷移発火識別子
 
+> **This document's version number (`1.0`) is independent of, and not
+> comparable to, `SPEC.md`'s own "Specification version" field (currently
+> `0.1.0`, Experimental).** They version two different documents — this
+> one covers only the identifier syntax and resolution profile; `SPEC.md`
+> covers the overall TII system (core event model, modules, portability).
+> A checkpoint's `spec_version` field (`spec/checkpoint-operation.md`)
+> records `SPEC.md`'s version, not this document's `1.0` — see `SPEC.md`'s
+> own header note for the full cross-reference. Text referring to an
+> identifier as "issued under TII 1.0" means this frozen syntax profile,
+> not a claim about `SPEC.md`'s version number.
+
 > **Status: 1.0 — FROZEN AS A SPECIFICATION (Production Launch Gate, G1,
 > 2026-09-11).** The syntax, encoding, canonicalization, and validation rules
 > below are frozen and will not change without a new major version. This is a
