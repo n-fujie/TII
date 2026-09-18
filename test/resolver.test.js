@@ -245,6 +245,36 @@ test('registry API — GET /catalog.json on the live dynamic server matches the 
   }
 });
 
+test('registry API — GET /catalog.json includes checkpoint verification status, matching the static export\'s checkpoint field (parity, not a re-implementation)', async () => {
+  const srv = await bootServerWithOneTII();
+  const checkpointDir = process.env.TII_CHECKPOINT_DIR; // bootServerWithOneTII() sets this before requiring src/server.js
+  try {
+    // Before any checkpoint exists: the field is present and correctly MISSING.
+    const before = JSON.parse((await get(srv.port, '/catalog.json')).text);
+    assert.ok('checkpoint' in before, 'the dynamic server\'s catalog.json must carry the same checkpoint field the static export does');
+    assert.equal(before.checkpoint.status, 'MISSING');
+
+    // Create a real checkpoint against the SAME ledger file the server is
+    // reading, then confirm the live route picks it up (it re-verifies on
+    // every request, never a cached value).
+    const { generateKeypair } = require('../src/checkpoint');
+    const checkpointStore = require('../src/checkpoint-store');
+    const kp = generateKeypair();
+    const keyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'tii-resolver-ckpt-key-'));
+    const keyFile = path.join(keyDir, 'key.pem');
+    fs.writeFileSync(keyFile, kp.privateKeyPem, { mode: 0o600 });
+    const ledgerForCheckpoint = new Ledger(srv.ledgerFile).load();
+    checkpointStore.createCheckpoint(ledgerForCheckpoint, { dir: checkpointDir, env: { TII_CHECKPOINT_PRIVATE_KEY_FILE: keyFile } });
+
+    const after = JSON.parse((await get(srv.port, '/catalog.json')).text);
+    assert.equal(after.checkpoint.status, 'VERIFIED');
+    assert.equal(after.checkpoint.matches_current_head, true);
+  } finally {
+    await srv.close();
+    srv.restoreEnv();
+  }
+});
+
 test('registry API — /catalog.json never embeds the resolver domain into an identifier: resolver_base is separate config, tii strings are unaffected by it', async () => {
   const srv = await bootServerWithOneTII();
   try {

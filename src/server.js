@@ -248,6 +248,7 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, {
         generated_at: new Date().toISOString(),
         verification: ledger.verify(),
+        checkpoint: checkpointStore.verifyCheckpoint(ledger, { dir: CHECKPOINT_DIR }),
         resolver_base: RESOLVER_BASE,
         identifiers: summariesForRegistry(),
       });

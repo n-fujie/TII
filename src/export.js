@@ -6,6 +6,7 @@ const path = require('node:path');
 const { project } = require('./projection');
 const { tiiToFileSlug } = require('./id');
 const views = require('./views');
+const checkpointStore = require('./checkpoint-store');
 
 const REPO_ROOT = path.join(__dirname, '..');
 
@@ -103,6 +104,31 @@ function buildStaticSite(ledger, outDir, options = {}) {
   const generatedAt = new Date().toISOString();
   const verification = ledger.verify();
 
+  // SPEC.md §12.3 / spec/checkpoint-operation.md: an Ed25519-signed
+  // checkpoint is the mechanism by which "a ledger head obtained from any
+  // source can be checked against" an independently-held attestation —
+  // "a checkpoint file can be copied off the server, published
+  // independently, mirrored, or diffed by hand". Read-only: this reads
+  // checkpoint files that a separate, already-audited operator action
+  // (`tii checkpoint create`) produced; it creates no new checkpoint and
+  // never touches the signing key or passphrase (verifyCheckpoint() only
+  // ever needs the PUBLIC key). checkpointDir defaults exactly like
+  // src/server.js's CHECKPOINT_DIR so a local `rebuild-static` run picks up
+  // the same checkpoints/ the dynamic server and CLI already use.
+  const checkpointDir = options.checkpointDir || process.env.TII_CHECKPOINT_DIR || path.join(REPO_ROOT, 'checkpoints');
+  const checkpointVerification = checkpointStore.verifyCheckpoint(ledger, { dir: checkpointDir });
+  // Explicit allowlist by filename pattern, never a directory wildcard copy
+  // -- checkpoint-*.json (self-contained: attested fields + Ed25519
+  // signature + the signer's PUBLIC key, no secret) and keyset.json (public
+  // key history only, see src/checkpoint-store.js's own doc comment on
+  // loadKeyset()). A production signing key or passphrase is never stored
+  // in this directory in the first place (kept outside the repo entirely),
+  // but this function does not trust that by omission -- it only ever
+  // copies files matching this exact allowlist.
+  const checkpointFilesToPublish = fs.existsSync(checkpointDir)
+    ? fs.readdirSync(checkpointDir).filter((f) => (f.startsWith('checkpoint-') && f.endsWith('.json')) || f === 'keyset.json')
+    : [];
+
   const buildDir = `${outDir}.building-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   fs.rmSync(buildDir, { recursive: true, force: true });
   fs.mkdirSync(path.join(buildDir, 'tii'), { recursive: true });
@@ -114,6 +140,13 @@ function buildStaticSite(ledger, outDir, options = {}) {
     fs.writeFileSync(path.join(buildDir, 'ledger.jsonl'), toJSONL(ledger));
     fs.writeFileSync(path.join(buildDir, 'ledger.json'), toJSON(ledger));
     fs.writeFileSync(path.join(buildDir, 'ledger.csv'), toCSV(ledger));
+
+    if (checkpointFilesToPublish.length > 0) {
+      fs.mkdirSync(path.join(buildDir, 'checkpoints'), { recursive: true });
+      for (const f of checkpointFilesToPublish) {
+        fs.copyFileSync(path.join(checkpointDir, f), path.join(buildDir, 'checkpoints', f));
+      }
+    }
 
     summaries = [];
     for (const tii of ledger.listTIIs()) {
@@ -138,7 +171,7 @@ function buildStaticSite(ledger, outDir, options = {}) {
       fs.writeFileSync(path.join(dir, 'registry.html'), views.registryPage({ lang, summaries }));
       fs.writeFileSync(
         path.join(dir, 'audit.html'),
-        views.auditPage({ lang, verification, generatedAt, exportBase: '/ledger' })
+        views.auditPage({ lang, verification, generatedAt, exportBase: '/ledger', checkpoint: checkpointVerification })
       );
       for (const [, d] of Object.entries(DOCS)) {
         fs.writeFileSync(
@@ -152,7 +185,7 @@ function buildStaticSite(ledger, outDir, options = {}) {
 
     fs.writeFileSync(
       path.join(buildDir, 'catalog.json'),
-      JSON.stringify({ generated_at: generatedAt, verification, resolver_base: resolverBase, identifiers: summaries }, null, 2)
+      JSON.stringify({ generated_at: generatedAt, verification, checkpoint: checkpointVerification, resolver_base: resolverBase, identifiers: summaries }, null, 2)
     );
 
     // Atomic swap. If `outDir` doesn't exist yet this is a single rename —
@@ -175,7 +208,7 @@ function buildStaticSite(ledger, outDir, options = {}) {
     throw e;
   }
 
-  return { outDir, tii_count: summaries.length, verification };
+  return { outDir, tii_count: summaries.length, verification, checkpoint: checkpointVerification, checkpoint_files_published: checkpointFilesToPublish.length };
 }
 
 module.exports = { toJSON, toJSONL, toCSV, buildStaticSite, publicSummary, readDoc, DOCS, CSV_COLUMNS };
