@@ -209,8 +209,7 @@ class Ledger {
       const existingId = this._idempotency.get(idempotency_key);
       if (existingId) {
         const existing = this.getEvent(existingId);
-        const same = existing.event_type === 'tii.issued' && canonicalize(existing.content || {}) === canonicalize(intendedContent);
-        if (!same) {
+        if (!this._matchesIntendedIssuance(existing, intendedContent)) {
           throw new Error(`idempotency_key "${idempotency_key}" was already used for a different operation`);
         }
         return { tii: existing.tii, event: existing, idempotent_replay: true };
@@ -218,17 +217,48 @@ class Ledger {
     }
 
     const tii = newTII((c) => this.tiiExists(c));
-    const event = this.append({
-      tii,
-      event_type: 'tii.issued',
-      recorder,
-      content: intendedContent,
-      basis,
-      external_refs,
-      content_verification,
-      idempotency_key,
-    });
-    return { tii, event };
+    try {
+      const event = this.append({
+        tii,
+        event_type: 'tii.issued',
+        recorder,
+        content: intendedContent,
+        basis,
+        external_refs,
+        content_verification,
+        idempotency_key,
+      });
+      return { tii, event };
+    } catch (e) {
+      // A concurrent caller may have completed THIS exact logical request
+      // (same idempotency_key, same content) while we were drawing our own
+      // (losing) candidate — the pre-check above ran before their append
+      // committed, so we didn't see it then. append()'s own authoritative
+      // resync (inside the writer lock) means this instance's in-memory
+      // state is now current: resolve by re-checking, not by assuming.
+      // Mirrors issueProductionTII()'s identical recovery
+      // (src/production-issuance.js) for the same reason — this must fire
+      // ONLY on this exact, already-resynced-by-append() error message,
+      // never for a writer-lock timeout, a recovery-required error, or any
+      // other failure, which all propagate unchanged below.
+      if (idempotency_key && /^idempotency_key ".*" was already used for a different operation$/.test(e.message)) {
+        const existingId = this._idempotency.get(idempotency_key);
+        const existing = existingId ? this.getEvent(existingId) : null;
+        if (existing && this._matchesIntendedIssuance(existing, intendedContent)) {
+          return { tii: existing.tii, event: existing, idempotent_replay: true };
+        }
+      }
+      throw e; // genuinely different intent under the same key, or any other error
+    }
+  }
+
+  /** Shared by issueTII()'s pre-check and its post-throw replay recovery
+   * above: does `existing` (a persisted tii.issued event) represent the
+   * SAME logical issuance as one that would produce `intendedContent`?
+   * Deliberately does not compare `tii` — a caller recovering from a lost
+   * race never had a chance to know the winner's tii. */
+  _matchesIntendedIssuance(existing, intendedContent) {
+    return !!existing && existing.event_type === 'tii.issued' && canonicalize(existing.content || {}) === canonicalize(intendedContent ?? {});
   }
 
   /**
