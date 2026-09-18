@@ -56,7 +56,25 @@ class Ledger {
     this.recovery = { required: false, malformedTail: null, journalObservedAtLoad: false };
 
     if (fs.existsSync(this.file)) {
-      const raw = fs.readFileSync(this.file, 'utf8');
+      // Read as a Buffer and derive _lastKnownSize from ITS length — never
+      // from a separate fs.statSync() call. A prior version called statSync()
+      // independently, after this read, which opened a TOCTOU window: if a
+      // concurrent writer's append (fsynced under ITS OWN writer-lock
+      // critical section) landed between the read and the stat, this
+      // instance ended up with _lastKnownSize matching the NEW (post-write)
+      // size while `events`/`_idempotency`/`_issuedTII` still reflected the
+      // OLD (pre-write) content — and because _resyncIfChanged()'s entire
+      // correctness model is "if size matches, our data is current", that
+      // mismatch was never self-corrected: the missed event stayed
+      // permanently invisible to this instance. Confirmed by reproduction
+      // under concurrent load (see test/ledger-concurrency-read-race.test.js):
+      // two worker processes both resolved a shared idempotency_key as
+      // unused and both appended, producing two events at seq 0 and a
+      // broken hash chain. Deriving the size from the same bytes that were
+      // actually parsed makes the two values impossible to disagree,
+      // regardless of when a concurrent write lands relative to this read.
+      const buf = fs.readFileSync(this.file);
+      const raw = buf.toString('utf8');
       const { events, malformed } = parseLedgerTolerant(raw);
       for (const ev of events) this._index(ev);
       if (malformed) {
@@ -65,9 +83,11 @@ class Ledger {
         this.recovery.required = true;
         this.recovery.malformedTail = malformed;
       }
+      this._lastKnownSize = buf.length;
+    } else {
+      this._lastKnownSize = 0;
     }
     this.recovery.journalObservedAtLoad = fs.existsSync(journalPath(this.file));
-    this._lastKnownSize = fs.existsSync(this.file) ? fs.statSync(this.file).size : 0;
     return this;
   }
 
