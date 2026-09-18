@@ -320,14 +320,16 @@ test('source scan: idempotency replay-recovery control flow no longer parses e.m
   // message"). What must NOT exist is a regex/`.message` TEST against it.
   assert.ok(!/\.test\(e\.message\)/.test(ledgerSrc), 'src/ledger.js: no .message-based control flow remains at all');
 
-  // src/production-issuance.js legitimately still has ONE unrelated
-  // .test(e.message) check for a DIFFERENT condition -- authoritative TII
-  // token collision retry (`/^TII already issued/`), out of scope for this
-  // task (it is not the idempotency conflict). Confirm exactly that one
-  // survives and nothing else matching the idempotency-conflict wording
-  // does.
-  const messageChecks = [...prodSrc.matchAll(/\/(\^?[^/]*)\/\.test\(e\.message\)/g)].map((m) => m[1]);
-  assert.deepEqual(messageChecks, ['^TII already issued'], 'the only remaining .test(e.message) in src/production-issuance.js must be the out-of-scope TII-collision check, not the idempotency conflict');
+  // At the time this test was first written, src/production-issuance.js
+  // still had ONE unrelated .test(e.message) check for a DIFFERENT
+  // condition -- the authoritative TII token collision retry
+  // (`/^TII already issued/`), explicitly out of scope for THIS task (it
+  // is not the idempotency conflict). A later, separate task
+  // ("replace TII collision message matching with structured error",
+  // introducing TIIAlreadyIssuedError) removed that remaining occurrence
+  // too -- see test/tii-already-issued-error.test.js for its own coverage.
+  // Reflect that current reality here rather than asserting a stale count.
+  assert.ok(!/\.test\(e\.message\)/.test(prodSrc), 'src/production-issuance.js: no .message-based control flow remains at all now');
 
   // Positive confirmation: the actual discriminator used is instanceof.
   assert.ok(/e instanceof IdempotencyConflictError/.test(ledgerSrc));

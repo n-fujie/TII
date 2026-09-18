@@ -24,7 +24,7 @@ const identifierProd = require('./identifier');
 const gate = require('./production-gate');
 const checkpointStore = require('./checkpoint-store');
 const { canonicalize } = require('./canonical');
-const { IdempotencyConflictError } = require('./ledger');
+const { IdempotencyConflictError, TIIAlreadyIssuedError } = require('./ledger');
 
 class ProductionGateClosedError extends Error {
   constructor(status) {
@@ -152,11 +152,12 @@ function issueProductionTII(ledger, opts = {}) {
   // authoritative write lock" check the task requires; this module does not
   // duplicate that logic, it relies on it. If that authoritative check finds
   // a collision (vanishingly unlikely at 128 bits, but handled exactly as
-  // specified), append() throws "TII already issued" WITHOUT writing
-  // anything — the collided candidate is discarded, never entering the
-  // ledger, and a brand new candidate is drawn for the next attempt. Any
-  // OTHER error (writer-locked, recovery-required, etc.) is not a collision
-  // and is propagated immediately, not retried.
+  // specified), append() throws the structured TIIAlreadyIssuedError
+  // (src/ledger.js) WITHOUT writing anything — the collided candidate is
+  // discarded, never entering the ledger, and a brand new candidate is
+  // drawn for the next attempt. Any OTHER error (writer-locked,
+  // recovery-required, etc.) is not a collision and is propagated
+  // immediately, not retried.
   const MAX_ATTEMPTS = 1000;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const candidate = identifierProd.generateIdentifier();
@@ -192,7 +193,10 @@ function issueProductionTII(ledger, opts = {}) {
 
       return { tii: event.tii, event, gate_status: status, production_checkpoint };
     } catch (e) {
-      if (/^TII already issued/.test(e.message)) continue; // authoritative candidate collision, discard and retry with a fresh candidate
+      // Discriminated by error TYPE (see src/ledger.js's TIIAlreadyIssuedError
+      // doc comment), never by parsing `.message` — a human-readable
+      // message is not a stable control-flow signal.
+      if (e instanceof TIIAlreadyIssuedError) continue; // authoritative candidate collision, discard and retry with a fresh candidate
 
       // A concurrent caller may have completed THIS exact logical request
       // (same idempotency_key, same intent) while we were drawing our own

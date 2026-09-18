@@ -32,6 +32,26 @@ class IdempotencyConflictError extends Error {
 }
 
 /**
+ * Thrown by _validateAppend() when appending a NEW `tii.issued` event whose
+ * candidate `tii` already exists in the ledger — a generated-identifier
+ * collision (spec/production-launch-gate.md §10), unrelated to
+ * idempotency_key. STRUCTURED discriminator for the same reason as
+ * IdempotencyConflictError above: issueProductionTII()'s collision-retry
+ * loop (src/production-issuance.js) must identify exactly this condition —
+ * "discard this candidate and draw a fresh one" — via `instanceof`/`.code`,
+ * never by parsing `.message`. The message text itself is unchanged from
+ * before this class existed.
+ */
+class TIIAlreadyIssuedError extends Error {
+  constructor(message, { tii } = {}) {
+    super(message);
+    this.name = 'TIIAlreadyIssuedError';
+    this.code = 'tii-already-issued';
+    this.tii = tii;
+  }
+}
+
+/**
  * Append-only event ledger. The JSONL file is the record of authority (要件20).
  * Existing lines are never rewritten; corrections are new events that reference
  * the event they supersede (要件5).
@@ -309,7 +329,7 @@ class Ledger {
       throw new Error('unknown TII (issue it first): ' + partial.tii);
     }
     if (partial.event_type === 'tii.issued' && this.tiiExists(partial.tii)) {
-      throw new Error('TII already issued: ' + partial.tii);
+      throw new TIIAlreadyIssuedError('TII already issued: ' + partial.tii, { tii: partial.tii });
     }
     if (partial.supersedes && !this.eventExists(partial.supersedes)) {
       throw new Error('supersedes references unknown event: ' + partial.supersedes);
@@ -483,4 +503,4 @@ function omitKey(obj, key) {
   return rest;
 }
 
-module.exports = { Ledger, normalizeRecorder, IdempotencyConflictError };
+module.exports = { Ledger, normalizeRecorder, IdempotencyConflictError, TIIAlreadyIssuedError };
