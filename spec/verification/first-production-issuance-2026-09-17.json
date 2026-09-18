@@ -1,0 +1,76 @@
+{
+  "record_type": "first_production_issuance_verification",
+  "record_purpose": "Evidence and documentation only. Grants no authorization for any future production issuance.",
+  "event_name": "First production TII issuance",
+  "issuance_date": "2026-09-17",
+  "production_identifier": "tii:fabdi3ifjwteyi3os2hwmx2l5i",
+  "commits": {
+    "first_production_issuance_commit": "419de8f6988415e7bb55faf69fa161d57ea9fbac",
+    "first_production_issuance_commit_note": "This commit appends exactly one line to data/ledger.jsonl; see git show 419de8f for its full diff, not restated here.",
+    "canonical_completion_commit": "2306df1c0741e0d7046bbc45957d21dad50a082d",
+    "sop_documentation_commit": "035b55de1cb3efc53fbb97453defdb755a34c823"
+  },
+  "annotated_tag": {
+    "name": "tii-first-production-issuance-2026-09-17",
+    "resolved_commit_sha": "2306df1c0741e0d7046bbc45957d21dad50a082d",
+    "signed": false,
+    "note": "Annotated, not cryptographically signed. See the 'Provenance assessment' section of the companion .md record for why no additive attestation was created and the deferred, human-only signing options."
+  },
+  "ledger_verification": {
+    "file": "data/ledger.jsonl",
+    "event_count": 11,
+    "sha256": "34e415cbf63a721ee6aa5ea34907cbf095f67e526ddc401923d09037737fd664",
+    "head_hash": "398b085ecf6784b5a8bad5c97bd70fb200cd3966ebaabfe82ba10ee50538e4bc",
+    "chain_verify_ok": true,
+    "production_tii_issued_event": {
+      "event_id": "evt_bfrbdmdd6sprept3",
+      "tii": "tii:fabdi3ifjwteyi3os2hwmx2l5i",
+      "seq": 10,
+      "prev_hash": "eb27a2b7a557465b1301e7225052d03b6fc1550caa7b9ea943e5e90835427e95",
+      "hash": "398b085ecf6784b5a8bad5c97bd70fb200cd3966ebaabfe82ba10ee50538e4bc",
+      "identifier_status": "production"
+    },
+    "total_tii_issued_events": 2,
+    "production_tii_issued_events": 1,
+    "test_tii_issued_events": 1
+  },
+  "checkpoint_verification": {
+    "checkpoint_directory": "checkpoints",
+    "key_id": "1486de6152baec7f",
+    "checkpoints": [
+      {
+        "file": "checkpoint-0000000010-2026-09-17T031239532Z-d1515f.json",
+        "event_count": 10,
+        "head_hash": "eb27a2b7a557465b1301e7225052d03b6fc1550caa7b9ea943e5e90835427e95",
+        "status": "VERIFIED",
+        "matches_current_head": false,
+        "note": "predates the production issuance; valid stale checkpoint, not a forgery signal"
+      },
+      {
+        "file": "checkpoint-0000000011-2026-09-17T041740279Z-51b8e4.json",
+        "event_count": 11,
+        "head_hash": "398b085ecf6784b5a8bad5c97bd70fb200cd3966ebaabfe82ba10ee50538e4bc",
+        "status": "VERIFIED",
+        "matches_current_head": true
+      },
+      {
+        "file": "checkpoint-0000000011-2026-09-17T041740340Z-fbf603.json",
+        "event_count": 11,
+        "head_hash": "398b085ecf6784b5a8bad5c97bd70fb200cd3966ebaabfe82ba10ee50538e4bc",
+        "status": "VERIFIED",
+        "matches_current_head": true
+      }
+    ]
+  },
+  "test_suite": {
+    "total": 242,
+    "passing": 242,
+    "failing": 0
+  },
+  "statements": {
+    "tagging_and_documentation_caused_no_ledger_mutation": true,
+    "no_second_production_identifier_issued": true,
+    "record_is_evidence_only_not_authorization": true,
+    "verifiable_only_via_read_only_operations": true
+  }
+}

@@ -13,6 +13,41 @@
 > `spec/first-production-issuance-procedure.md`; this document is the
 > short, repeatable checklist distilled from them.
 
+## Five distinct activities (do not conflate these)
+
+1. **Verification** — read-only confirmation that a *past* issuance is
+   exactly what it claims to be
+   (`node scripts/verify-first-production-issuance.js`; evidence record at
+   `spec/verification/first-production-issuance-2026-09-17.{json,md}`).
+   Proves nothing about the future.
+2. **Preflight** — read-only confirmation that the repository is
+   currently *healthy enough for a human to begin reviewing* a possible
+   *future* issuance (`node scripts/preflight-production-issuance.js`,
+   optionally with `--idempotency-key <proposed-key>`). **PREFLIGHT PASSED
+   does not mean ISSUANCE AUTHORIZED** — it establishes only that the
+   repository is in a state suitable for human review. It does not
+   authorize or execute production issuance, and it is structurally
+   incapable of doing so (it never imports `src/production-issuance.js`,
+   never sets any `TII_*` variable, never touches the passphrase).
+3. **Review/authorization** — the human decision, in writing, naming the
+   exact commit and the exact new issuance
+   (`spec/production-issuance-authorization-record.md`'s pattern). Neither
+   verification nor a passing preflight is itself a review or an
+   authorization.
+4. **Ephemeral human execution** — the actual issuance, run only by the
+   steward, in the subshell pattern below. Never performed by the agent.
+5. **Independent post-execution verification** — the agent re-derives
+   every claim from disk after the steward reports the (non-secret)
+   result, exactly as this SOP's step 5 describes; this is what eventually
+   produces a new verification record like the one for the first
+   issuance.
+
+These are five separate steps for a reason: a clean preflight on Tuesday
+does not carry over to Thursday, a verification record for issuance #1
+says nothing about the safety of issuing #2, and no combination of
+verification and preflight ever substitutes for the human review in step
+3 or the fresh authorization it requires.
+
 ## Roles
 
 - **Steward/operator** (human, holds the production passphrase): runs
@@ -34,6 +69,12 @@
 
 ## The procedure
 
+0. **Run the preflight** (agent or steward, read-only):
+   `node scripts/preflight-production-issuance.js --idempotency-key
+   <proposed-key>`. A failing preflight stops here — fix the reported
+   condition and re-run. A passing preflight only means the repository is
+   ready for the human review in step 2; it is not itself that review and
+   does not shortcut it.
 1. **Capture the pre-issuance baseline** (agent, read-only): ledger
    SHA-256, event count, head hash, identifier count and list, current
    checkpoint's independent verification (public key only).
@@ -90,6 +131,15 @@
    separately from the issuance commit, then create an annotated tag
    pointing at that exact completion commit
    (`tii-first-production-issuance-<date>` pattern) and push it.
+7. **Publish a standalone verification record**: add
+   `spec/verification/<event-name>-<date>.{json,md}` following the shape
+   of `spec/verification/first-production-issuance-2026-09-17.{json,md}`
+   (public, non-secret facts only: commits, tag, ledger fingerprint,
+   checkpoint fingerprints, test result, explicit "evidence only, no
+   authorization" statement), then confirm
+   `node scripts/verify-first-production-issuance.js` — or its
+   equivalent for the new event, if a separate script is warranted —
+   still exits 0.
 
 ## Non-negotiable invariants (do not relax these)
 
@@ -123,3 +173,10 @@ authorization cycle — a new reviewed runbook, a new explicit human
 authorization statement naming the new event, and a new unique
 idempotency key. Nothing here pre-authorizes any future issuance; each
 one is reviewed and approved on its own.
+
+A passing run of `scripts/preflight-production-issuance.js` is not an
+exception to this: it is a health check on the repository, not a review
+of the specific issuance, and it never itself sets any gate condition or
+touches the passphrase. Likewise, the existence of a verification record
+for a past issuance does not extend, imply, or pre-clear authorization
+for any future one.
