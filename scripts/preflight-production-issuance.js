@@ -56,20 +56,85 @@ const gate = require(path.join(REPO, 'src/production-gate.js'));
 
 const DISCLAIMER = 'PREFLIGHT PASSED does not mean ISSUANCE AUTHORIZED. A successful preflight establishes only that the repository is in a state suitable for human review. It does not authorize or execute production issuance.';
 
+/**
+ * The exact, closed set of test names permitted to be skipped for the
+ * "complete test suite passes" preflight check to still succeed. This is
+ * NOT "skip count === 1" -- it is checked by exact test-name STRING
+ * identity, so a different test becoming skipped (even with the same
+ * total skip count) fails closed, same as an entirely unexpected skip
+ * would. Add an entry here only for a skip that is genuinely intentional,
+ * documented at its own test() call, and gated behind its own explicit
+ * opt-in condition (see test/ledger-concurrency-read-race.test.js's
+ * "optional slow repro..." test for the existing example) -- never to make
+ * this check easier to pass.
+ */
+const KNOWN_INTENTIONAL_TEST_SKIPS = [
+  'optional slow repro: many real concurrent processes converge on one event under load',
+];
+
 function git(cmdArgs) {
   return execFileSync('git', cmdArgs, { cwd: REPO, encoding: 'utf8' }).trim();
+}
+
+/** Parses `npm test`'s captured stdout (node's built-in --test runner,
+ * spec reporter) into structured counts plus the exact names of any
+ * skipped tests. Any field this can't find is `null` -- never silently
+ * defaulted to 0 -- so a genuinely malformed/unexpected output shape
+ * fails closed downstream rather than being misread as "no skips". */
+function parseTestSuiteOutput(out) {
+  const num = (re) => {
+    const m = out.match(re);
+    return m ? Number(m[1]) : null;
+  };
+  const skippedNames = [...out.matchAll(/^﹣ (.+?) \([\d.]+ms\) # SKIP$/gm)].map((m) => m[1]);
+  return {
+    total: num(/ℹ tests (\d+)/),
+    pass: num(/ℹ pass (\d+)/),
+    fail: num(/ℹ fail (\d+)/),
+    skipped: num(/ℹ skipped (\d+)/),
+    cancelled: num(/ℹ cancelled (\d+)/),
+    todo: num(/ℹ todo (\d+)/),
+    skippedNames,
+  };
 }
 
 function realRunTestSuite() {
   try {
     const out = execFileSync('npm', ['test'], { cwd: REPO, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    const passMatch = out.match(/ℹ pass (\d+)/);
-    const failMatch = out.match(/ℹ fail (\d+)/);
-    const totalMatch = out.match(/ℹ tests (\d+)/);
-    return { total: totalMatch && Number(totalMatch[1]), pass: passMatch && Number(passMatch[1]), fail: failMatch && Number(failMatch[1]) };
+    return parseTestSuiteOutput(out);
   } catch (e) {
-    return { total: null, pass: null, fail: null, error: 'test run failed to complete', message: e.message };
+    return { total: null, pass: null, fail: null, skipped: null, cancelled: null, todo: null, skippedNames: null, error: 'test run failed to complete', message: e.message };
   }
+}
+
+/**
+ * The corrected test-readiness invariant (replaces the old, unsatisfiable
+ * `pass === total`, which could never hold whenever ANY test was skipped —
+ * including a fully intentional, permanently-opt-in one — permanently
+ * blocking a healthy repository from ever reaching PREFLIGHT PASSED).
+ *
+ * True if and only if: every count needed is present (fails closed on
+ * malformed/missing output); there are zero failures, zero cancelled, and
+ * zero todo tests; the reported skip count and the number of individually
+ * named skip lines agree (parser self-consistency); every individually
+ * named skipped test is in KNOWN_INTENTIONAL_TEST_SKIPS (identity, not
+ * count); and pass+fail+cancelled+skipped+todo reconciles exactly to the
+ * reported total (full accounting integrity). This is intentionally
+ * stronger than `passed + skipped === total` alone, which by itself would
+ * accept a same-count SUBSTITUTION of an unexpected skip for the known
+ * one.
+ */
+function testSuiteReadiness(r) {
+  const countsPresent = [r.total, r.pass, r.fail, r.skipped, r.cancelled, r.todo].every((v) => v != null) && Array.isArray(r.skippedNames);
+  if (!countsPresent) return { ok: false, reason: 'test result counts incomplete or unparseable' };
+  if (r.fail !== 0) return { ok: false, reason: `${r.fail} test(s) failed` };
+  if (r.cancelled !== 0) return { ok: false, reason: `${r.cancelled} test(s) cancelled` };
+  if (r.todo !== 0) return { ok: false, reason: `${r.todo} test(s) marked todo` };
+  if (r.skippedNames.length !== r.skipped) return { ok: false, reason: 'skipped count and named skip lines disagree' };
+  const unrecognized = r.skippedNames.filter((name) => !KNOWN_INTENTIONAL_TEST_SKIPS.includes(name));
+  if (unrecognized.length > 0) return { ok: false, reason: 'unrecognized skipped test(s): ' + unrecognized.join(', ') };
+  if (r.pass + r.fail + r.cancelled + r.skipped + r.todo !== r.total) return { ok: false, reason: 'pass+fail+cancelled+skipped+todo does not reconcile to total' };
+  return { ok: true, reason: 'all executed tests passed; every skipped test is a recognized intentional opt-in' };
 }
 
 /**
@@ -91,7 +156,12 @@ function runPreflight({ env = process.env, candidateIdempotencyKey = null, runTe
 
   /* --------------------------------------------------- 2. test suite --- */
   const testResult = runTestSuite();
-  check('complete test suite passes', testResult.fail === 0 && testResult.pass === testResult.total && testResult.total != null, testResult);
+  const readiness = testSuiteReadiness(testResult);
+  check(
+    'complete test suite passes',
+    readiness.ok,
+    { ...testResult, known_intentional_skips: KNOWN_INTENTIONAL_TEST_SKIPS, reason: readiness.reason }
+  );
 
   /* --------------------------------------------------- 3. ledger integrity --- */
   const ledgerFile = path.join(REPO, 'data', 'ledger.jsonl');
@@ -176,7 +246,7 @@ function runPreflight({ env = process.env, candidateIdempotencyKey = null, runTe
   return { preflight_passed: !failed, disclaimer: DISCLAIMER, checks: results };
 }
 
-module.exports = { runPreflight };
+module.exports = { runPreflight, testSuiteReadiness, parseTestSuiteOutput, KNOWN_INTENTIONAL_TEST_SKIPS };
 
 /* --------------------------------------------------------------- CLI --- */
 if (require.main === module) {
