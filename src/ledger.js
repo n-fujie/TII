@@ -10,6 +10,28 @@ const { acquireWriterLock } = require('./writer-lock');
 const { RecoveryRequiredError, journalPath, fsyncFile, parseLedgerTolerant } = require('./recovery');
 
 /**
+ * Thrown by _validateAppend() (and the equivalent pre-check in issueTII())
+ * when an idempotency_key is already mapped to a persisted event whose
+ * content does not match the caller's intended content. This is a
+ * STRUCTURED discriminator specifically so replay-recovery control flow
+ * (issueTII() here, and issueProductionTII() in
+ * src/production-issuance.js) can identify "this specific, recoverable
+ * condition" via `instanceof`/`.code`, never by parsing `.message` — a
+ * human-readable message is easy to accidentally match against an
+ * unrelated error that merely happens to contain similar text, or to break
+ * silently if the wording is ever edited. The message text itself is
+ * unchanged from before this class existed.
+ */
+class IdempotencyConflictError extends Error {
+  constructor(message, { idempotencyKey } = {}) {
+    super(message);
+    this.name = 'IdempotencyConflictError';
+    this.code = 'idempotency-conflict';
+    this.idempotencyKey = idempotencyKey;
+  }
+}
+
+/**
  * Append-only event ledger. The JSONL file is the record of authority (要件20).
  * Existing lines are never rewritten; corrections are new events that reference
  * the event they supersede (要件5).
@@ -210,7 +232,7 @@ class Ledger {
       if (existingId) {
         const existing = this.getEvent(existingId);
         if (!this._matchesIntendedIssuance(existing, intendedContent)) {
-          throw new Error(`idempotency_key "${idempotency_key}" was already used for a different operation`);
+          throw new IdempotencyConflictError(`idempotency_key "${idempotency_key}" was already used for a different operation`, { idempotencyKey: idempotency_key });
         }
         return { tii: existing.tii, event: existing, idempotent_replay: true };
       }
@@ -238,10 +260,13 @@ class Ledger {
       // state is now current: resolve by re-checking, not by assuming.
       // Mirrors issueProductionTII()'s identical recovery
       // (src/production-issuance.js) for the same reason — this must fire
-      // ONLY on this exact, already-resynced-by-append() error message,
-      // never for a writer-lock timeout, a recovery-required error, or any
-      // other failure, which all propagate unchanged below.
-      if (idempotency_key && /^idempotency_key ".*" was already used for a different operation$/.test(e.message)) {
+      // ONLY when append() threw the structured IdempotencyConflictError
+      // (proof a resync already happened), never for a WriterLockedError, a
+      // RecoveryRequiredError, or any other failure, which all propagate
+      // unchanged below. Discriminated by error TYPE, not by parsing
+      // `.message` — a human-readable message is not a stable control-flow
+      // signal (it could match an unrelated error, or change wording).
+      if (idempotency_key && e instanceof IdempotencyConflictError) {
         const existingId = this._idempotency.get(idempotency_key);
         const existing = existingId ? this.getEvent(existingId) : null;
         if (existing && this._matchesIntendedIssuance(existing, intendedContent)) {
@@ -277,7 +302,7 @@ class Ledger {
           existing.event_type === partial.event_type &&
           canonicalize(existing.content || {}) === canonicalize(partial.content ?? {});
         if (same) return existing; // idempotent replay: no new write, no duplicate
-        throw new Error(`idempotency_key "${partial.idempotency_key}" was already used for a different operation`);
+        throw new IdempotencyConflictError(`idempotency_key "${partial.idempotency_key}" was already used for a different operation`, { idempotencyKey: partial.idempotency_key });
       }
     }
     if (partial.event_type !== 'tii.issued' && !this.tiiExists(partial.tii)) {
@@ -458,4 +483,4 @@ function omitKey(obj, key) {
   return rest;
 }
 
-module.exports = { Ledger, normalizeRecorder };
+module.exports = { Ledger, normalizeRecorder, IdempotencyConflictError };

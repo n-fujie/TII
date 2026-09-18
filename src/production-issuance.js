@@ -24,6 +24,7 @@ const identifierProd = require('./identifier');
 const gate = require('./production-gate');
 const checkpointStore = require('./checkpoint-store');
 const { canonicalize } = require('./canonical');
+const { IdempotencyConflictError } = require('./ledger');
 
 class ProductionGateClosedError extends Error {
   constructor(status) {
@@ -107,7 +108,7 @@ function issueProductionTII(ledger, opts = {}) {
     const existing = ledger.findByIdempotencyKey(idempotency_key);
     if (existing) {
       if (!sameIssuanceIntent(existing, intendedContent)) {
-        throw new Error(`idempotency_key "${idempotency_key}" was already used for a different operation`);
+        throw new IdempotencyConflictError(`idempotency_key "${idempotency_key}" was already used for a different operation`, { idempotencyKey: idempotency_key });
       }
       return {
         tii: existing.tii,
@@ -201,8 +202,11 @@ function issueProductionTII(ledger, opts = {}) {
       // instance's in-memory state is now current: resolve by re-checking,
       // not by assuming. If it now matches, this is a replay, not a
       // conflict — return the winner's result rather than propagating an
-      // error to a caller who made the identical request.
-      if (idempotency_key && /^idempotency_key ".*" was already used for a different operation$/.test(e.message)) {
+      // error to a caller who made the identical request. Discriminated by
+      // error TYPE (proof a resync already happened inside append()), never
+      // by parsing `.message` — see src/ledger.js's IdempotencyConflictError
+      // doc comment for why a message string is not a stable signal.
+      if (idempotency_key && e instanceof IdempotencyConflictError) {
         const existing = ledger.findByIdempotencyKey(idempotency_key);
         if (sameIssuanceIntent(existing, intendedContent)) {
           return {
