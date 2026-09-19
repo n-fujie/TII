@@ -27,6 +27,15 @@ const STRINGS = {
     home_do_audit: 'Check ledger integrity on the Audit page.',
     home_core_note:
       'The TII core is deliberately minimal. State, transition, ignition, address, domain, boundary, relation, and lineage are optional, revisable descriptive structures — not assumed to exist for every identifier.',
+    self_service_heading: 'Get a test identifier',
+    self_service_intro:
+      'Issue your own test TII now — free, instant, always identifier_status: "test". Rate-limited to prevent abuse.',
+    self_service_note_placeholder: 'Optional note (up to 280 characters)',
+    self_service_button: 'Issue a test TII',
+    self_service_button_busy: 'Issuing…',
+    self_service_result_prefix: 'Issued: ',
+    self_service_error_generic: 'Could not issue an identifier. Please try again later.',
+    self_service_error_rate_limited: 'Rate limit reached. Please try again later.',
 
     registry_title: 'Registry',
     registry_intro:
@@ -149,6 +158,15 @@ const STRINGS = {
     home_do_audit: '監査ページで台帳の整合性を確認する。',
     home_core_note:
       'TIIコアは意図的に最小限です。状態・遷移・発火・アドレス・ドメイン・境界・関係・系譜は任意かつ改訂可能な記述構造であり、すべての識別子に存在すると仮定しません。',
+    self_service_heading: '試験用識別子を取得',
+    self_service_intro:
+      '無料・即時で自分の試験用TIIを発行できます（常に identifier_status: "test"）。濫用防止のためレート制限があります。',
+    self_service_note_placeholder: '任意のメモ（最大280文字）',
+    self_service_button: '試験用TIIを発行',
+    self_service_button_busy: '発行中…',
+    self_service_result_prefix: '発行されました: ',
+    self_service_error_generic: '発行できませんでした。しばらくしてから再試行してください。',
+    self_service_error_rate_limited: 'レート制限に達しました。しばらくしてから再試行してください。',
 
     registry_title: 'レジストリ',
     registry_intro:

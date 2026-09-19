@@ -22,6 +22,16 @@ const PORT = Number(process.env.PORT || process.env.TII_PORT || 3009);
 const ADMIN_TOKEN = process.env.TII_ADMIN_TOKEN || '';
 const RESOLVER_BASE = process.env.TII_RESOLVER_BASE_URL || '';
 const CHECKPOINT_DIR = process.env.TII_CHECKPOINT_DIR || path.join(__dirname, '..', 'checkpoints');
+// Public, unauthenticated, test-identifier-only self-service issuance.
+// Off by default — strict boolean parsing, matching src/production-gate.js's
+// convention (`=== 'true'` only, never truthy-string coercion). This is
+// structurally separate from the gated production-only issuance module
+// (src/ledger.js's issueTII() only, always identifier_status "test") and
+// is not gated by or capable of touching src/production-gate.js in any way.
+const SELF_SERVICE_ENABLED = process.env.TII_SELF_SERVICE_ENABLED === 'true';
+const SELF_SERVICE_RATE_LIMIT_MAX = Number(process.env.TII_SELF_SERVICE_RATE_LIMIT_MAX || 5);
+const SELF_SERVICE_RATE_LIMIT_WINDOW_MS = Number(process.env.TII_SELF_SERVICE_RATE_LIMIT_WINDOW_MS || 60 * 60 * 1000);
+const SELF_SERVICE_NOTE_MAX_LENGTH = 280;
 // P0-B: file hashing is restricted to a configured safe directory, or disabled
 // entirely — never an arbitrary server path. See spec/production-hardening-phase1.md §P0-B.
 //
@@ -53,8 +63,8 @@ function send(res, status, body, headers = {}) {
   res.writeHead(status, { 'X-TII-Status': 'experimental', ...headers });
   res.end(body);
 }
-const sendJSON = (res, s, o) =>
-  send(res, s, JSON.stringify(o, null, 2), { 'Content-Type': 'application/json; charset=utf-8' });
+const sendJSON = (res, s, o, headers = {}) =>
+  send(res, s, JSON.stringify(o, null, 2), { 'Content-Type': 'application/json; charset=utf-8', ...headers });
 const sendHTML = (res, s, h) => send(res, s, h, { 'Content-Type': 'text/html; charset=utf-8' });
 const redirect = (res, loc) => {
   res.writeHead(302, { Location: loc });
@@ -160,6 +170,42 @@ function idempotencyKeyFrom(req, body) {
 }
 
 /**
+ * Best-effort client IP for self-service rate limiting only — NOT a security
+ * boundary. `X-Forwarded-For` is trusted as-is (a client with no trusted
+ * reverse proxy in front of this server can spoof it freely); this is
+ * acceptable here because the only consequence of a spoofed value is a
+ * throttling miss on a public endpoint that can only ever mint a `test`
+ * identifier, never anything touching production issuance, the gate, or a
+ * signing key. Do not reuse this function anywhere a genuine security
+ * decision depends on the caller's real address.
+ */
+function selfServiceClientIp(req) {
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) return String(xff).split(',')[0].trim();
+  return req.socket.remoteAddress || 'unknown';
+}
+
+/** In-memory sliding-window rate limiter, keyed by selfServiceClientIp().
+ * Deliberately simple (no external dependency, per this project's zero-
+ * dependency constraint) and deliberately per-process — a multi-instance
+ * deployment would not share state across instances, which only makes the
+ * limit less strict, never less safe (the endpoint remains
+ * test-identifier-only regardless of how often it is called). */
+const selfServiceRateLimitState = new Map(); // ip -> timestamps[] within the current window
+function selfServiceRateLimited(ip) {
+  const now = Date.now();
+  const windowStart = now - SELF_SERVICE_RATE_LIMIT_WINDOW_MS;
+  const recent = (selfServiceRateLimitState.get(ip) || []).filter((t) => t > windowStart);
+  if (recent.length >= SELF_SERVICE_RATE_LIMIT_MAX) {
+    selfServiceRateLimitState.set(ip, recent);
+    return { limited: true, retryAfterMs: Math.max(0, recent[0] + SELF_SERVICE_RATE_LIMIT_WINDOW_MS - now) };
+  }
+  recent.push(now);
+  selfServiceRateLimitState.set(ip, recent);
+  return { limited: false };
+}
+
+/**
  * Best-effort checkpoint after a successful authoritative write (P0-A chosen
  * policy — see spec/checkpoint-operation.md §Policy). Never blocks or fails
  * the mutation: if no signing key is configured this is a silent no-op for
@@ -232,7 +278,7 @@ const server = http.createServer(async (req, res) => {
   try {
     /* ---- public HTML ---- */
     if (method === 'GET' && parts.length === 0) {
-      return sendHTML(res, 200, views.homePage({ lang }));
+      return sendHTML(res, 200, views.homePage({ lang, selfServiceEnabled: SELF_SERVICE_ENABLED }));
     }
 
     if (method === 'GET' && parts[0] === 'registry' && parts.length === 1) {
@@ -376,6 +422,48 @@ const server = http.createServer(async (req, res) => {
         return sendJSON(res, 200, exporters.buildStaticSite(ledger, out, { resolverBase: RESOLVER_BASE }));
       }
       return send(res, 404, 'unknown export');
+    }
+
+    /* ---- public self-service: test-identifier issuance only ----
+     * Deliberately separate from the admin-token-gated /api/tii route below
+     * (never reuses its authorization check — this route has none, by
+     * design) and structurally incapable of touching production issuance:
+     * it calls ONLY ledger.issueTII() with no `identifier_status` override
+     * (always "test"), never imports or can reach the gated production-only
+     * issuance module or src/production-gate.js. Off unless
+     * TII_SELF_SERVICE_ENABLED=true;
+     * rate-limited per client IP (best-effort only, see
+     * selfServiceClientIp()'s doc comment); note length capped to bound
+     * storage growth from a public unauthenticated endpoint. */
+    if (method === 'POST' && parts[0] === 'self-service' && parts[1] === 'issue' && parts.length === 2) {
+      if (!SELF_SERVICE_ENABLED) {
+        return sendJSON(res, 404, { error: 'self-service issuance is not enabled on this deployment' });
+      }
+      const ip = selfServiceClientIp(req);
+      const rl = selfServiceRateLimited(ip);
+      if (rl.limited) {
+        return sendJSON(
+          res,
+          429,
+          { error: 'rate limit exceeded', retry_after_ms: rl.retryAfterMs },
+          { 'Retry-After': String(Math.ceil(rl.retryAfterMs / 1000)) }
+        );
+      }
+      const body = parseBody(await readBody(req), req.headers['content-type']);
+      let content = {};
+      if (typeof body.note === 'string' && body.note.length > 0) {
+        if (body.note.length > SELF_SERVICE_NOTE_MAX_LENGTH) {
+          return sendJSON(res, 400, { error: `note must be at most ${SELF_SERVICE_NOTE_MAX_LENGTH} characters` });
+        }
+        content = { note: body.note };
+      }
+      const { tii, event, idempotent_replay } = ledger.issueTII({
+        recorder: { id: 'self-service', kind: 'mechanism' },
+        content,
+        idempotency_key: idempotencyKeyFrom(req, body),
+      });
+      if (!idempotent_replay) maybeAutoCheckpoint();
+      return sendJSON(res, idempotent_replay ? 200 : 201, { tii, event, idempotent_replay: !!idempotent_replay, resolve_url: `/tii/${encodeURIComponent(tii)}` });
     }
 
     /* ---- API: create TII ---- */

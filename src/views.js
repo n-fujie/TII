@@ -90,6 +90,16 @@ form.resolve input:focus{outline:2px solid var(--accent);outline-offset:1px;bord
 .btn:hover,form.resolve button:hover{background:var(--accent-ink);text-decoration:none}
 .btn.secondary{background:#fff;color:var(--accent)}
 
+section.self-service{margin:1.6rem 0;padding:1rem 1.2rem;border:1px solid var(--line-strong);border-radius:4px;max-width:34rem}
+section.self-service h2{font-size:1rem;margin:0 0 .4rem}
+form.self-service-form{display:flex;gap:.5rem;margin:.8rem 0 0}
+form.self-service-form input{flex:1;font-family:var(--sans);font-size:.9rem;padding:.55rem .7rem;
+  border:1px solid var(--line-strong);border-radius:2px;background:#fff;color:var(--ink)}
+form.self-service-form button{font-family:var(--sans);font-size:.9rem;padding:.55rem 1rem;
+  border:1px solid var(--accent);border-radius:2px;background:var(--accent);color:#fff;cursor:pointer}
+form.self-service-form button:disabled{opacity:.6;cursor:default}
+.self-service-result{font-family:var(--mono);font-size:.85rem;margin:.6rem 0 0;min-height:1.2em}
+
 ul.home-links{list-style:none;padding:0;margin:2rem 0;border-top:1px solid var(--line)}
 ul.home-links li{border-bottom:1px solid var(--line)}
 ul.home-links li a{display:block;padding:.85rem 0;color:var(--ink)}
@@ -197,10 +207,29 @@ ${langHtml}
 
 /* --------------------------------------------------------------- homepage --- */
 
-function homePage({ lang }) {
+function homePage({ lang, selfServiceEnabled = false }) {
   lang = normalizeLang(lang);
   const L = (k) => t(lang, k);
   const base = lang === 'ja' ? '/ja' : '';
+  // Self-service issuance is a DYNAMIC-SERVER-ONLY capability (it writes to
+  // the ledger) — never rendered on the static export, which has no live
+  // endpoint to call. See src/server.js's /self-service/issue route: always
+  // identifier_status "test", never production; rate-limited; off unless
+  // TII_SELF_SERVICE_ENABLED=true. buildStaticSite() never passes
+  // selfServiceEnabled, so it defaults to false there and this section is
+  // simply absent — consistent with "no empty module blocks" (README.md).
+  const selfServiceSection = selfServiceEnabled
+    ? `
+<section class="self-service">
+<h2>${esc(L('self_service_heading'))}</h2>
+<p class="muted small">${esc(L('self_service_intro'))}</p>
+<form class="self-service-form">
+<input name="note" maxlength="280" placeholder="${esc(L('self_service_note_placeholder'))}" aria-label="${esc(L('self_service_note_placeholder'))}">
+<button type="submit">${esc(L('self_service_button'))}</button>
+</form>
+<p class="self-service-result" role="status" aria-live="polite"></p>
+</section>`
+    : '';
   const body = `
 <section class="hero">
 <div class="mark-lg">TII</div>
@@ -213,6 +242,7 @@ function homePage({ lang }) {
 <button type="submit">${esc(L('home_resolve'))}</button>
 </form>
 </section>
+${selfServiceSection}
 
 <ul class="home-links">
 <li><a href="${href(lang, '/registry')}">${esc(L('home_do_registry'))}</a></li>
@@ -231,6 +261,36 @@ var v=splitFragment(f.tii.value).base;if(!v){return;}
 if(v.indexOf('tii:')!==0){v='tii:'+v.replace(/^tii[:_]?/,'');}
 var slug=v.replace(/[^a-z0-9]+/g,'_');
 window.location.href=${JSON.stringify(base)}+'/tii/'+slug;});})();
+${selfServiceEnabled
+  ? `
+(function(){
+var f=document.querySelector('form.self-service-form');if(!f)return;
+var result=document.querySelector('.self-service-result');
+var btn=f.querySelector('button');
+var busyLabel=${JSON.stringify(L('self_service_button_busy'))};
+var idleLabel=${JSON.stringify(L('self_service_button'))};
+f.addEventListener('submit',function(e){
+e.preventDefault();
+btn.disabled=true;btn.textContent=busyLabel;result.textContent='';
+fetch(${JSON.stringify(base)}+'/self-service/issue',{
+  method:'POST',
+  headers:{'Content-Type':'application/json'},
+  body:JSON.stringify({note:f.note.value||undefined})
+}).then(function(r){return r.json().then(function(b){return {ok:r.ok,status:r.status,body:b};});})
+  .then(function(res){
+    btn.disabled=false;btn.textContent=idleLabel;
+    if(!res.ok){
+      result.textContent=res.status===429?${JSON.stringify(L('self_service_error_rate_limited'))}:${JSON.stringify(L('self_service_error_generic'))};
+      return;
+    }
+    result.textContent=${JSON.stringify(L('self_service_result_prefix'))}+res.body.tii;
+    f.note.value='';
+  }).catch(function(){
+    btn.disabled=false;btn.textContent=idleLabel;
+    result.textContent=${JSON.stringify(L('self_service_error_generic'))};
+  });
+});})();`
+  : ''}
 </script>
 `;
   return shell({ lang, title: 'TII — Transition-Ignition Identifier', path: '/', body });
