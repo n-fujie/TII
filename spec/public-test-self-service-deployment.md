@@ -29,7 +29,7 @@ the resulting operational shape, it does not itself provide the enforcement.
 | `TII_SELF_SERVICE_ENABLED` | yes | must be exactly `true`, or the route 404s |
 | `TII_LEDGER` | yes | must NOT resolve (lexically or via symlink) to the repository's own `data/ledger.jsonl`; startup refuses otherwise |
 | `TII_CHECKPOINT_DIR` | yes | must NOT resolve to the repository's own `checkpoints/`; startup refuses otherwise. Checkpoint **signing** is unconditionally disabled in this mode regardless of this value or of any signing key present in the environment |
-| `TII_TRUSTED_PROXY_HEADER` | no | unset by default (no proxy header trusted — only the TCP peer address). Set to exactly one of `x-forwarded-for`, `cf-connecting-ip`, `x-real-ip` if and only if exactly one reverse proxy sits in front of this process and appends that header itself |
+| `TII_TRUSTED_PROXY_HEADER` | no | unset by default (no proxy header trusted — only the TCP peer address). Set to exactly one of `x-forwarded-for`, `cf-connecting-ip`, `x-real-ip`, `fly-client-ip` if and only if exactly one reverse proxy sits in front of this process and appends that header itself. On Fly.io specifically, prefer `fly-client-ip` over `x-forwarded-for` — Fly sets it itself as a single trustworthy value, whereas Fly's own docs describe `X-Forwarded-For` there as a client-influenceable chain |
 | `TII_REGISTRY_LABEL` | no | human-readable label shown on TEST resolution pages (Phase 11 provenance). Leave unset to omit the provenance block entirely |
 | `TII_SELF_SERVICE_RATE_LIMIT_MAX` / `_WINDOW_MS` | no | per-IP issuance quota, defaults 5 / 1 hour |
 | `TII_SELF_SERVICE_GLOBAL_QUOTA_MAX` / `_WINDOW_MS` | no | global issuance quota across all callers, defaults 200 / 1 hour. In-process only — see §5 |

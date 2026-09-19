@@ -286,6 +286,26 @@ test('TII_TRUSTED_PROXY_HEADER=x-forwarded-for: a single well-formed value is tr
   }
 });
 
+test('TII_TRUSTED_PROXY_HEADER=fly-client-ip: Fly.io\'s own client-IP header is a supported, trusted allowlist entry', async () => {
+  const srv = await bootServer({
+    TII_SELF_SERVICE_ENABLED: 'true',
+    TII_SELF_SERVICE_RATE_LIMIT_MAX: '1',
+    TII_SELF_SERVICE_RATE_LIMIT_WINDOW_MS: '60000',
+    TII_TRUSTED_PROXY_HEADER: 'fly-client-ip',
+  });
+  try {
+    const a1 = await request(srv.port, 'POST', '/self-service/issue', { headers: { 'fly-client-ip': '203.0.113.1' }, body: {} });
+    const a2 = await request(srv.port, 'POST', '/self-service/issue', { headers: { 'fly-client-ip': '203.0.113.1' }, body: {} });
+    const b1 = await request(srv.port, 'POST', '/self-service/issue', { headers: { 'fly-client-ip': '203.0.113.2' }, body: {} });
+    assert.equal(a1.status, 201);
+    assert.equal(a2.status, 429);
+    assert.equal(b1.status, 201);
+  } finally {
+    await srv.close();
+    srv.restoreEnv();
+  }
+});
+
 test('TII_TRUSTED_PROXY_HEADER=x-forwarded-for: a malformed multi-value header falls back to the socket address, not the client-supplied first hop', async () => {
   const srv = await bootServer({
     TII_SELF_SERVICE_ENABLED: 'true',

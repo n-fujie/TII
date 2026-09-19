@@ -319,8 +319,12 @@ function idempotencyKeyFrom(req, body) {
 // from a small reviewed allowlist rather than an arbitrary string (so a
 // misconfiguration can't accidentally trust something like `x-real-ip` on a
 // deployment that never sets it, and so this never hardwires one specific
-// CDN vendor).
-const TRUSTED_PROXY_HEADER_ALLOWLIST = new Set(['x-forwarded-for', 'cf-connecting-ip', 'x-real-ip']);
+// CDN vendor). `fly-client-ip` is Fly.io's proxy-set header (single value,
+// overwritten by Fly's edge — see https://fly.io/docs/networking/request-headers/
+// — distinct from `x-forwarded-for`, which Fly documents as a
+// client-influenceable chain and explicitly warns must be treated with
+// caution).
+const TRUSTED_PROXY_HEADER_ALLOWLIST = new Set(['x-forwarded-for', 'cf-connecting-ip', 'x-real-ip', 'fly-client-ip']);
 const TRUSTED_PROXY_HEADER = (() => {
   const raw = process.env.TII_TRUSTED_PROXY_HEADER;
   if (!raw) return '';
