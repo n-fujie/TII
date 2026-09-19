@@ -435,7 +435,7 @@ ${note}${curHtml}${recordHistory(lang, b)}</div>`;
   return `<h2 id="${id}">${esc(title)}</h2>${blocks}`;
 }
 
-function resolutionPage({ lang, p, resolverBase = '' }) {
+function resolutionPage({ lang, p, resolverBase = '', registryLabel = '' }) {
   lang = normalizeLang(lang);
   const L = (k) => t(lang, k);
 
@@ -663,12 +663,26 @@ ${!anyCurrent && !interp ? `<p class="notice">${esc(L('res_no_current_state'))}<
 
   const machine = `<p class="small"><a href="/tii/${tiiToFileSlug(p.tii)}.json">${esc(L('res_structured'))}</a></p>`;
 
+  // Provenance (Phase 11, public self-service deployments only): rendered
+  // only when the operator has configured a registry label, so an ordinary
+  // deployment that never sets TII_REGISTRY_LABEL renders exactly as before.
+  // This never touches the `tii:` URI syntax or the token itself — it is
+  // purely a page-level statement plus a link to this registry's own
+  // read-only verification surface, sourced from configuration
+  // (resolverBase), never hardcoded.
+  const registryProvenance =
+    isTest && registryLabel
+      ? `<p class="small muted">${esc(L('registry_provenance_label'))} <strong>${esc(registryLabel)}</strong><br>
+<a href="${esc((resolverBase || '') + '/verify')}">${esc(L('registry_provenance_link'))}</a></p>`
+      : '';
+
   const body = `
 <h1>TII</h1>
 <div class="idbox">${esc(p.tii)}</div>
 <p>${isTest ? `<span class="tag">${esc(L('test_identifier'))}</span> ` : ''}
 <span class="chip">${esc(recordStatusLabel(p.lifecycle_state, lang))}</span>
 ${p.disputes.length ? `<span class="chip warn">${esc(L('res_disputed'))} ${p.disputes.length}</span>` : ''}</p>
+${registryProvenance}
 ${toc}
 ${overview}
 ${recordSection}

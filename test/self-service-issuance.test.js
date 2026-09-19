@@ -201,7 +201,16 @@ test('POST /self-service/issue: exceeding the rate limit returns 429 with Retry-
 });
 
 test('POST /self-service/issue: rate limiting is keyed per client IP, not global', async () => {
-  const srv = await bootServer({ TII_SELF_SERVICE_ENABLED: 'true', TII_SELF_SERVICE_RATE_LIMIT_MAX: '1', TII_SELF_SERVICE_RATE_LIMIT_WINDOW_MS: '60000' });
+  // Explicitly opts in to trusting X-Forwarded-For (deployment-readiness
+  // hardening: this is no longer trusted by default — see
+  // TII_TRUSTED_PROXY_HEADER in src/server.js) so this test can keep
+  // exercising per-IP keying against distinct synthetic addresses.
+  const srv = await bootServer({
+    TII_SELF_SERVICE_ENABLED: 'true',
+    TII_SELF_SERVICE_RATE_LIMIT_MAX: '1',
+    TII_SELF_SERVICE_RATE_LIMIT_WINDOW_MS: '60000',
+    TII_TRUSTED_PROXY_HEADER: 'x-forwarded-for',
+  });
   try {
     const a1 = await request(srv.port, 'POST', '/self-service/issue', { headers: { 'x-forwarded-for': '203.0.113.1' }, body: {} });
     const a2 = await request(srv.port, 'POST', '/self-service/issue', { headers: { 'x-forwarded-for': '203.0.113.1' }, body: {} });

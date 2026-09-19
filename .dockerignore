@@ -1,0 +1,33 @@
+# Deployment-readiness hardening: the PUBLIC TEST self-service image must
+# never contain the repository's own ledger, checkpoints, or any operator
+# secret material. This list is reviewed alongside Dockerfile and
+# spec/public-test-self-service-deployment.md's "what enters the image"
+# section — treat any change here as security-relevant.
+
+.git
+node_modules
+dist
+public
+
+# The historical production ledger and its evidence trail. Never needed
+# inside the TEST runtime image — the TEST deployment mode is configured to
+# use a dedicated volume-mounted ledger instead (TII_LEDGER=/data/ledger/ledger.jsonl).
+data
+checkpoints
+
+# Never committed in the first place (see .gitignore), but excluded here
+# too as defense-in-depth against a local, uncommitted copy being present
+# on the build machine.
+*.private.pem
+*.lock
+*.journal
+.env
+.env.*
+
+test
+spec
+*.md
+.vercel
+vercel.json
+.dockerignore
+Dockerfile

@@ -48,6 +48,8 @@ const STRINGS = {
     col_recorded_at: 'Recorded at',
     registry_empty: 'No identifiers recorded.',
     test_identifier: 'TEST IDENTIFIER',
+    registry_provenance_label: 'This identifier belongs to a public TEST registry:',
+    registry_provenance_link: "This registry's own verification page →",
 
     status_active: 'Active',
     status_suspended: 'Suspended',
@@ -179,6 +181,8 @@ const STRINGS = {
     col_recorded_at: '記録日時',
     registry_empty: '記録された識別子はありません。',
     test_identifier: '試験用識別子',
+    registry_provenance_label: 'この識別子は公開TESTレジストリに属します：',
+    registry_provenance_link: 'このレジストリ自身の検証ページ →',
 
     status_active: '有効',
     status_suspended: '停止',
