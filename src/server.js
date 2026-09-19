@@ -4,6 +4,7 @@ const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
+const net = require('node:net');
 const { URL } = require('node:url');
 
 const { Ledger } = require('./ledger');
@@ -131,9 +132,21 @@ function validatePublicSelfServiceDeployment() {
       'TII_DEPLOYMENT_MODE=public-self-service refuses to run against the repository default checkpoint directory (or a path resolving to it). Configure TII_CHECKPOINT_DIR to a dedicated TEST-only directory.'
     );
   }
-}
 
-validatePublicSelfServiceDeployment();
+  // Cloudflare-in-front-of-Fly trust chain (see TRUSTED_PROXY_CIDRS /
+  // isTrustedProxyPeer() / selfServiceClientIp() below): CF-Connecting-IP is
+  // only ever trusted after confirming the immediate proxy peer belongs to
+  // an explicitly configured network. An empty allowlist here would mean
+  // CF-Connecting-IP could never be trusted (every request would be
+  // rejected as untrusted origin, per-request, at the write endpoint) --
+  // this catches that misconfiguration eagerly at startup instead of
+  // silently deploying a self-service endpoint that rejects every request.
+  if (TRUSTED_PROXY_HEADER === 'cf-connecting-ip' && TRUSTED_PROXY_CIDRS.length === 0) {
+    throw new Error(
+      'TII_DEPLOYMENT_MODE=public-self-service with TII_TRUSTED_PROXY_HEADER=cf-connecting-ip requires a non-empty TII_TRUSTED_PROXY_CIDRS allowlist of trusted proxy source networks.'
+    );
+  }
+}
 // P0-B: file hashing is restricted to a configured safe directory, or disabled
 // entirely — never an arbitrary server path. See spec/production-hardening-phase1.md §P0-B.
 //
@@ -156,6 +169,180 @@ const ADMIN_HASH_DIR_REAL = (() => {
   }
 })();
 const ADMIN_HASH_DIR = ADMIN_HASH_DIR_REAL;
+
+// Client IP resolution used for self-service rate limiting only. By default
+// (TII_TRUSTED_PROXY_HEADER unset) NO proxy header is trusted at all, and
+// only the actual TCP peer address is used — a client with no trusted
+// reverse proxy in front of this server cannot spoof its way past the
+// per-IP limiter. An operator running behind exactly one reverse proxy may
+// opt in to trusting a single named header, chosen from a small reviewed
+// allowlist rather than an arbitrary string (so a misconfiguration can't
+// accidentally trust something like `x-real-ip` on a deployment that never
+// sets it, and so this never hardwires one specific CDN vendor).
+// `fly-client-ip` is Fly.io's own proxy-set header (single value,
+// overwritten by Fly's edge — see
+// https://fly.io/docs/networking/request-headers/). `cf-connecting-ip` is
+// Cloudflare's — but unlike the other three entries, its mere presence is
+// NOT sufficient proof that Cloudflare actually handled the request: a
+// client connecting directly to the Fly origin can set that header to
+// anything it likes. In public-self-service deployment mode specifically,
+// selfServiceClientIp() additionally requires the immediate Fly-visible
+// peer to belong to an explicitly configured trusted network
+// (isTrustedProxyPeer() / TII_TRUSTED_PROXY_CIDRS below) before trusting
+// this header at all — see that function's doc comment for why this is
+// scoped to public-self-service mode rather than applied to
+// cf-connecting-ip selection everywhere.
+const TRUSTED_PROXY_HEADER_ALLOWLIST = new Set(['x-forwarded-for', 'cf-connecting-ip', 'x-real-ip', 'fly-client-ip']);
+const TRUSTED_PROXY_HEADER = (() => {
+  const raw = process.env.TII_TRUSTED_PROXY_HEADER;
+  if (!raw) return '';
+  const normalized = raw.trim().toLowerCase();
+  if (!TRUSTED_PROXY_HEADER_ALLOWLIST.has(normalized)) {
+    throw new Error(
+      `TII_TRUSTED_PROXY_HEADER=${JSON.stringify(raw)} is not one of the supported header names: ${[...TRUSTED_PROXY_HEADER_ALLOWLIST].join(', ')}`
+    );
+  }
+  return normalized;
+})();
+
+/* ---- trusted proxy source networks (Cloudflare-in-front-of-Fly model) ---
+ *
+ * Trusting CF-Connecting-IP because it is merely present is not safe: a
+ * client that reaches the Fly origin directly (bypassing Cloudflare
+ * entirely) can set that header to whatever it wants. The only thing this
+ * process can actually verify is WHO connected to Fly immediately before it
+ * — Fly reports that peer via the Fly-Client-IP header (see
+ * https://fly.io/docs/networking/request-headers/). When Cloudflare is the
+ * one actually in front, Fly-Client-IP is Cloudflare's own edge node
+ * address; CF-Connecting-IP is only trustworthy once that peer address is
+ * confirmed to belong to the explicitly configured set of trusted proxy
+ * networks (TII_TRUSTED_PROXY_CIDRS) — never merely because a header with a
+ * plausible-looking value showed up.
+ *
+ * This list is NOT downloaded or auto-updated at runtime (no outbound
+ * fetch, no hidden network call) and is NOT a hardcoded, permanently-frozen
+ * copy of Cloudflare's IP ranges baked into source — this repository has no
+ * established mechanism for keeping such a baked-in list current, and
+ * shipping one that silently goes stale would be worse than requiring
+ * explicit configuration. An operator supplies the current ranges (e.g.
+ * from https://www.cloudflare.com/ips/) as configuration instead; see
+ * spec/public-test-self-service-deployment.md for how that list is expected
+ * to be obtained and refreshed operationally.
+ */
+
+function ipv4ToInt(ip) {
+  const parts = ip.split('.');
+  if (parts.length !== 4) return null;
+  let n = 0;
+  for (const p of parts) {
+    if (!/^\d{1,3}$/.test(p) || Number(p) > 255) return null;
+    n = (n << 8) | Number(p);
+  }
+  return n >>> 0;
+}
+
+function ipv4Mask(prefix) {
+  if (prefix <= 0) return 0;
+  if (prefix >= 32) return 0xffffffff >>> 0;
+  return (0xffffffff << (32 - prefix)) >>> 0;
+}
+
+/** Expands a syntactically-valid (per net.isIPv6) IPv6 address to a 128-bit
+ * BigInt. Deliberately does not support an embedded-IPv4 tail (e.g.
+ * "::ffff:1.2.3.4") or a zone ID (e.g. "%eth0") — neither is needed for a
+ * CDN's published address ranges, and refusing them is safer than parsing
+ * either incorrectly. */
+function ipv6ToBigInt(ip) {
+  if (ip.includes('%') || ip.includes('.')) return null;
+  if ((ip.match(/::/g) || []).length > 1) return null;
+  const [head, tail] = ip.includes('::') ? ip.split('::') : [ip, ''];
+  const headParts = head ? head.split(':') : [];
+  const tailParts = tail ? tail.split(':') : [];
+  const missing = 8 - headParts.length - tailParts.length;
+  if (missing < 0) return null;
+  const allParts = [...headParts, ...Array(missing).fill('0'), ...tailParts];
+  if (allParts.length !== 8) return null;
+  let result = 0n;
+  for (const part of allParts) {
+    if (!/^[0-9a-fA-F]{1,4}$/.test(part)) return null;
+    result = (result << 16n) | BigInt(parseInt(part, 16));
+  }
+  return result;
+}
+
+function ipv6Mask(prefix) {
+  if (prefix <= 0) return 0n;
+  if (prefix >= 128) return (1n << 128n) - 1n;
+  return ((1n << BigInt(prefix)) - 1n) << BigInt(128 - prefix);
+}
+
+/** Parses one "address/prefix" entry. Throws on anything that is not a
+ * clean, unambiguous IPv4 or IPv6 CIDR — never returns a partial or
+ * best-guess result. */
+function parseCidr(cidrStr) {
+  const idx = cidrStr.lastIndexOf('/');
+  if (idx === -1) throw new Error(`not a CIDR (missing "/"): ${JSON.stringify(cidrStr)}`);
+  const addr = cidrStr.slice(0, idx);
+  const prefixStr = cidrStr.slice(idx + 1);
+  if (!/^\d{1,3}$/.test(prefixStr)) throw new Error(`invalid CIDR prefix length: ${JSON.stringify(cidrStr)}`);
+  const prefix = Number(prefixStr);
+
+  if (net.isIPv4(addr)) {
+    if (prefix > 32) throw new Error(`invalid IPv4 CIDR prefix length: ${JSON.stringify(cidrStr)}`);
+    const base = ipv4ToInt(addr);
+    if (base === null) throw new Error(`invalid IPv4 address in CIDR: ${JSON.stringify(cidrStr)}`);
+    return { family: 4, base, prefix };
+  }
+  if (net.isIPv6(addr)) {
+    if (prefix > 128) throw new Error(`invalid IPv6 CIDR prefix length: ${JSON.stringify(cidrStr)}`);
+    const base = ipv6ToBigInt(addr);
+    if (base === null) throw new Error(`invalid IPv6 address in CIDR: ${JSON.stringify(cidrStr)}`);
+    return { family: 6, base, prefix };
+  }
+  throw new Error(`not a valid IPv4 or IPv6 address in CIDR: ${JSON.stringify(cidrStr)}`);
+}
+
+function ipInCidr(ip, cidr) {
+  if (cidr.family === 4) {
+    if (!net.isIPv4(ip)) return false;
+    const ipInt = ipv4ToInt(ip);
+    if (ipInt === null) return false;
+    const mask = ipv4Mask(cidr.prefix);
+    return ((ipInt & mask) >>> 0) === ((cidr.base & mask) >>> 0);
+  }
+  if (cidr.family === 6) {
+    if (!net.isIPv6(ip)) return false;
+    const ipBig = ipv6ToBigInt(ip);
+    if (ipBig === null) return false;
+    const mask = ipv6Mask(cidr.prefix);
+    return (ipBig & mask) === (cidr.base & mask);
+  }
+  return false;
+}
+
+// Parsed unconditionally at module load, mirroring TII_TRUSTED_PROXY_HEADER's
+// own validation above: once an operator sets this variable at all, a
+// malformed entry fails startup immediately rather than being silently
+// dropped or ignored, regardless of deployment mode. Empty/unset parses to
+// an empty list, which simply means "no trusted proxy source is configured"
+// — see validatePublicSelfServiceDeployment() for where an empty list is
+// additionally rejected as insufficient specifically when
+// TII_TRUSTED_PROXY_HEADER=cf-connecting-ip in public-self-service mode.
+const TRUSTED_PROXY_CIDRS = (() => {
+  const raw = process.env.TII_TRUSTED_PROXY_CIDRS || '';
+  if (!raw.trim()) return [];
+  return raw.split(',').map((entry) => {
+    const trimmed = entry.trim();
+    if (!trimmed) throw new Error(`TII_TRUSTED_PROXY_CIDRS contains an empty entry: ${JSON.stringify(raw)}`);
+    return parseCidr(trimmed);
+  });
+})();
+
+function isTrustedProxyPeer(ip) {
+  return TRUSTED_PROXY_CIDRS.some((cidr) => ipInCidr(ip, cidr));
+}
+
+validatePublicSelfServiceDeployment();
 
 const ledger = new Ledger(DATA_FILE).load();
 
@@ -310,33 +497,6 @@ function idempotencyKeyFrom(req, body) {
   return req.headers['idempotency-key'] || body.idempotency_key || undefined;
 }
 
-// Client IP resolution used for self-service rate limiting only — never a
-// security boundary. By default (TII_TRUSTED_PROXY_HEADER unset) NO proxy
-// header is trusted at all, and only the actual TCP peer address is used —
-// a client with no trusted reverse proxy in front of this server cannot
-// spoof its way past the per-IP limiter. An operator running behind exactly
-// one reverse proxy may opt in to trusting a single named header, chosen
-// from a small reviewed allowlist rather than an arbitrary string (so a
-// misconfiguration can't accidentally trust something like `x-real-ip` on a
-// deployment that never sets it, and so this never hardwires one specific
-// CDN vendor). `fly-client-ip` is Fly.io's proxy-set header (single value,
-// overwritten by Fly's edge — see https://fly.io/docs/networking/request-headers/
-// — distinct from `x-forwarded-for`, which Fly documents as a
-// client-influenceable chain and explicitly warns must be treated with
-// caution).
-const TRUSTED_PROXY_HEADER_ALLOWLIST = new Set(['x-forwarded-for', 'cf-connecting-ip', 'x-real-ip', 'fly-client-ip']);
-const TRUSTED_PROXY_HEADER = (() => {
-  const raw = process.env.TII_TRUSTED_PROXY_HEADER;
-  if (!raw) return '';
-  const normalized = raw.trim().toLowerCase();
-  if (!TRUSTED_PROXY_HEADER_ALLOWLIST.has(normalized)) {
-    throw new Error(
-      `TII_TRUSTED_PROXY_HEADER=${JSON.stringify(raw)} is not one of the supported header names: ${[...TRUSTED_PROXY_HEADER_ALLOWLIST].join(', ')}`
-    );
-  }
-  return normalized;
-})();
-
 /**
  * A conservative shape check, not a full IPv4/IPv6 validator — its only job
  * is to reject values that are obviously not a single address (a
@@ -351,16 +511,47 @@ function isPlausibleIp(value) {
   return /^[0-9a-fA-F.:]+$/.test(v);
 }
 
+class ProxyOriginUntrustedError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ProxyOriginUntrustedError';
+    this.code = 'proxy-origin-untrusted';
+  }
+}
+
 /**
- * Best-effort client IP for self-service rate limiting only — NOT a security
- * boundary even when a trusted proxy header is configured (the consequence
- * of a limiter miss here is bounded: a throttling gap on a public endpoint
- * that can only ever mint a `test` identifier, never anything touching
- * production issuance, the gate, or a signing key). Do not reuse this
- * function anywhere a genuine security decision depends on the caller's
- * real address.
+ * Best-effort client IP for self-service rate limiting — NOT a general
+ * security boundary EXCEPT in the one case this function itself enforces
+ * as one: public-self-service deployment mode with cf-connecting-ip
+ * selected. There, an untrusted proxy origin causes this function to throw
+ * ProxyOriginUntrustedError rather than silently falling back to the socket
+ * address, because the socket address on a platform like Fly is that
+ * platform's own internal forwarding address, not a meaningful client
+ * identity — falling back to it would be actively wrong, not merely
+ * imprecise. This strict behavior is deliberately scoped to
+ * PUBLIC_SELF_SERVICE_MODE only (not to cf-connecting-ip selection alone),
+ * so an ordinary/local deployment that happens to set
+ * TII_TRUSTED_PROXY_HEADER=cf-connecting-ip keeps the exact same
+ * soft-fallback-to-socket behavior as every other configured header (a
+ * limiter miss there is bounded: this endpoint can only ever mint a `test`
+ * identifier, never anything touching production issuance, the gate, or a
+ * signing key).
  */
 function selfServiceClientIp(req) {
+  if (PUBLIC_SELF_SERVICE_MODE && TRUSTED_PROXY_HEADER === 'cf-connecting-ip') {
+    const flyPeer = req.headers['fly-client-ip'];
+    if (typeof flyPeer !== 'string' || !isPlausibleIp(flyPeer) || !isTrustedProxyPeer(flyPeer.trim())) {
+      throw new ProxyOriginUntrustedError(
+        'request did not arrive through an approved proxy source; refusing to trust CF-Connecting-IP'
+      );
+    }
+    const visitor = req.headers['cf-connecting-ip'];
+    if (typeof visitor !== 'string' || !isPlausibleIp(visitor)) {
+      throw new ProxyOriginUntrustedError('CF-Connecting-IP is missing or malformed on an otherwise-approved proxy path');
+    }
+    return visitor.trim();
+  }
+
   const socketIp = req.socket.remoteAddress || 'unknown';
   if (!TRUSTED_PROXY_HEADER) return socketIp;
   const headerValue = req.headers[TRUSTED_PROXY_HEADER];
@@ -727,6 +918,14 @@ const server = http.createServer(async (req, res) => {
       if (!SELF_SERVICE_ENABLED) {
         return sendJSON(res, 404, { error: 'self-service issuance is not enabled on this deployment' });
       }
+      // Resolved first, before any quota is consumed: in cf-connecting-ip
+      // mode this throws ProxyOriginUntrustedError (mapped to 403 below) for
+      // a request that did not arrive through an approved proxy source,
+      // rather than letting it consume a slot of either quota below. That
+      // matters specifically because the global quota is a shared resource
+      // — a flood of spoofed direct-to-origin requests must not be able to
+      // exhaust it on behalf of legitimate Cloudflare-routed traffic.
+      const ip = selfServiceClientIp(req);
       const gq = selfServiceGlobalQuotaExceeded();
       if (gq.exceeded) {
         return sendJSON(
@@ -736,7 +935,6 @@ const server = http.createServer(async (req, res) => {
           { 'Retry-After': String(Math.ceil(gq.retryAfterMs / 1000)) }
         );
       }
-      const ip = selfServiceClientIp(req);
       const rl = selfServiceRateLimited(ip);
       if (rl.limited) {
         return sendJSON(
@@ -932,7 +1130,9 @@ const server = http.createServer(async (req, res) => {
           ? 409
           : err.code === 'payload-too-large'
             ? 413
-            : 400;
+            : err.code === 'proxy-origin-untrusted'
+              ? 403
+              : 400;
     return sendJSON(res, status, { error: err.message, code: err.code });
   }
 });
