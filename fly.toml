@@ -1,0 +1,88 @@
+# TII public TEST self-service registry — Fly.io deployment manifest.
+#
+# NOT YET APPLIED: this file has been prepared but no `fly launch` / `fly
+# deploy` has been run against it, and no Fly.io app/volume exists yet. See
+# spec/public-test-self-service-deployment.md for the full runbook this
+# belongs to. Deliberately uncommitted for now — review before adding to
+# git history.
+#
+# Physically and operationally separate from the existing Vercel-hosted
+# static production mirror at transition-ignition-id.org: different
+# provider, different account scope, different domain, no shared build
+# pipeline.
+
+app = "tii-public-test"          # placeholder -- must be globally unique on Fly; rename before `fly launch`
+primary_region = "iad"           # placeholder -- pick the region closest to expected users; single region only (no multi-region replicas -- see single-writer constraint)
+
+[build]
+
+[env]
+  NODE_ENV = "production"
+  TII_DEPLOYMENT_MODE = "public-self-service"
+  TII_SELF_SERVICE_ENABLED = "false"                # stays false through Phase 16; a separate, explicit later step flips this
+  TII_LEDGER = "/data/ledger/ledger.jsonl"
+  TII_CHECKPOINT_DIR = "/data/checkpoints"
+  TII_REGISTRY_LABEL = "TII Public TEST Registry"
+  TII_RESOLVER_BASE_URL = "https://test.transition-ignition-id.org"   # set to the actual TEST subdomain once DNS (Phase 10) is chosen
+  # Recommended architecture puts Cloudflare (DNS + proxy, free tier) in
+  # front of this Fly app as the CDN/reverse-proxy layer (WAF, edge rate
+  # limiting, an instant path-block kill-switch) -- so the trusted header is
+  # Cloudflare's own CF-Connecting-IP, not Fly's. If this app is ever run
+  # with Fly's edge as the ONLY layer (no separate CDN in front), use
+  # "fly-client-ip" instead -- both names are supported by the allowlist,
+  # and TII_TRUSTED_PROXY_CIDRS below is only consulted/required in
+  # cf-connecting-ip mode (Fly-direct mode needs no CIDR configuration).
+  TII_TRUSTED_PROXY_HEADER = "cf-connecting-ip"
+  # CF-Connecting-IP is only trusted once the peer Fly itself saw
+  # (Fly-Client-IP) is confirmed to belong to one of these networks --
+  # otherwise the application rejects the self-service write outright,
+  # rather than trusting a header a direct-to-origin attacker could forge.
+  # Not auto-fetched or auto-updated by this application (no outbound
+  # network call at startup or at request time) -- the ranges below were
+  # copied from https://www.cloudflare.com/ips-v4 and
+  # https://www.cloudflare.com/ips-v6 on 2026-09-19 and must be re-verified
+  # against that page (or Cloudflare's own periodically-refreshed source)
+  # before each deploy; see spec/public-test-self-service-deployment.md
+  # §10 for the operational procedure.
+  TII_TRUSTED_PROXY_CIDRS = "173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32"
+  TII_SELF_SERVICE_RATE_LIMIT_MAX = "5"
+  TII_SELF_SERVICE_RATE_LIMIT_WINDOW_MS = "3600000"
+  TII_SELF_SERVICE_GLOBAL_QUOTA_MAX = "200"
+  TII_SELF_SERVICE_GLOBAL_QUOTA_WINDOW_MS = "3600000"
+  TII_SELF_SERVICE_MAX_LEDGER_BYTES = "52428800"
+  TII_SELF_SERVICE_MAX_EVENT_COUNT = "100000"
+  PORT = "3009"
+  # Deliberately absent: TII_CHECKPOINT_PRIVATE_KEY(_FILE),
+  # TII_CHECKPOINT_KEY_PASSPHRASE(_FILE), TII_ADMIN_TOKEN. None are set as
+  # Fly secrets either -- see the provisioning runbook's Phase 5 check.
+
+[[mounts]]
+  source = "tii_test_data"       # a dedicated Fly Volume, created once via `fly volumes create`, distinct from anything used by any other app/account
+  destination = "/data"
+
+[[services]]
+  internal_port = 3009
+  protocol = "tcp"
+  auto_stop_machines = false     # a persistent long-lived process, not scale-to-zero -- keeps this a single ordinary long-lived container, not ephemeral compute
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.http_checks]]
+    path = "/healthz"
+    method = "get"
+    interval = "15s"
+    timeout = "3s"
+    grace_period = "10s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
